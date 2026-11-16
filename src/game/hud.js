@@ -83,6 +83,7 @@ OM.HUD = (function () {
       const p = OM.Run.sellPrice(J);
       if (G.button(x - 2, y0 + L.cardH - 2, 44, 14, 'VENDER $' + p, 'gold')) {
         R.money += p; R.jokers.splice(H.sel.idx, 1); H.sel = null;
+        OM.LOG.sell(R, 'joker', J.id + (J.edition ? '+' + J.edition : ''), p);
         OM.sfx('sell'); OM.FX.burst(x + 20, y0 + 30, 'gold', 14); OM.FX.popText(x + 20, y0 + 20, '+$' + p, 'h');
         opts.onChange && opts.onChange();
       }
@@ -115,7 +116,7 @@ OM.HUD = (function () {
       const can = canUse(R, def, mode, api);
       if (G.button(x, y, 46, 13, 'USAR', 'green', !can)) { H.sel = null; useItem(R, idx, mode, api); }
       const sp = 1;
-      if (G.button(x, y + 14, 46, 13, 'VENDER $' + sp, 'gold')) { R.items.splice(idx, 1); R.money += sp; H.sel = null; OM.sfx('sell'); }
+      if (G.button(x, y + 14, 46, 13, 'VENDER $' + sp, 'gold')) { OM.LOG.sell(R, 'item', R.items[idx], sp); R.items.splice(idx, 1); R.money += sp; H.sel = null; OM.sfx('sell'); }
     }
   };
 
@@ -129,6 +130,7 @@ OM.HUD = (function () {
 
   // Aplica un consumible. fromPack: no está en R.items.
   function useItem(R, idx, mode, api, fromPackId) {
+    OM.LOG.item(R, fromPackId || R.items[idx], mode);
     const id = fromPackId || R.items[idx];
     const def = OM.itemDef(id);
     const consume = () => { if (!fromPackId) R.items.splice(R.items.indexOf(id), 1); };

@@ -167,6 +167,7 @@ window.OM = window.OM || {};
       if (!IN.touch) OM.UI.cursor(ctx, Math.round(IN.mx), Math.round(IN.my), G.cursor);
     } catch (err) {
       console.error(err);
+      try { OM.LOG.error(OM.R, (OM.sceneName || '?') + ': ' + (err && err.stack ? err.stack.split(String.fromCharCode(10)).slice(0, 3).join(' | ') : err)); } catch (e) {}
       ctx.fillStyle = '#300'; ctx.fillRect(0, 0, W, 12);
       ctx.fillStyle = '#fff'; ctx.font = '8px monospace'; ctx.fillText(String(err).slice(0, 120), 4, 9);
     }
@@ -177,6 +178,8 @@ window.OM = window.OM || {};
     IN.pressed = IN.released = IN.rpressed = false; IN.wheel = 0; IN.kp = {};
     requestAnimationFrame(frame);
   }
+
+  window.addEventListener('error', (e) => { try { OM.LOG.error(OM.R, 'window: ' + e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); } catch (x) {} });
 
   OM.boot = function () {
     (OM.ART_INIT || []).forEach((fn) => { try { fn(); } catch (e) { console.error('ART_INIT', e); } });

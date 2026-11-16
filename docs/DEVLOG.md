@@ -41,3 +41,14 @@
 - Contenido nuevo: comodines Eslabón, Limosna, Maestro del Efecto, Pulso de Cirujano, Segunda Oportunidad, Cadena Infernal (épico) y El Barquero (legendario). Jefes El Ciego, La Purista y El Reloj. Taco Espectral.
 - Desbloqueos persistentes (`OM.UNLOCKS`): Taco de la Usura (Círculo II), Taco de Hueso (Círculo III), Taco Espectral (3 jefes), Cadena Infernal (racha x5), El Barquero (ganar una vez).
 - `tools/serve.js`: servidor estático sin dependencias para probar en el navegador.
+
+## 2026-11-16 · Registro de partidas + bot de balance
+- `OM.LOG` registra cada tiro (con el aporte marginal de cada comodín), cada mesa, cada tienda y el dinero. Pantalla **REGISTRO** con banderas ROTO/INÚTIL/IGNORADO/DIFÍCIL/FÁCIL, exportar e importar JSON. Detalle en `docs/TELEMETRY.md`.
+- Pantalla final: valoración **fácil/justa/difícil** y **repetir semilla**. Los errores de consola quedan en el registro de la partida.
+- `tools/bot.js` juega miles de partidas con la lógica real (1000 en <1 s). `tools/analyze.js` hace el informe de cualquier registro.
+- Primer diagnóstico del bot (1000 partidas, política "compra lo mejor"):
+  - Ninguna mesa sola es injusta (cada una se supera entre el 55% y el 95%), pero **la supervivencia se compone en 18 mesas**: el bot medio gana el 0,3% de las partidas y el bueno el 0,9%. El cuello de botella está en C3-jefe y de ahí en adelante (60-70%).
+  - Comodines más fuertes por avance: Calavera Dorada, Eco del Abismo, Carambolero y Tiza Azul. Ninguno queda marcado ROTO con el criterio corregido.
+  - La Parca casi nunca se activa: las mesas se ganan antes de que queden ≤5 bolas. Candidata a rediseño.
+  - El Verdugo es un jefe FÁCIL (91%).
+  - Ojo de Cuervo e Imán salen bajos en el bot porque su valor depende de la física real: conviene confirmarlo con partidas humanas.

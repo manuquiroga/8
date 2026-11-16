@@ -22,6 +22,27 @@ OM.SCENES = OM.SCENES || {};
     if (G.button(x + 20, yy, w - 40, 18, 'ABANDONAR', 'red')) { onClose(); OM.go('gameover', { reason: 'quit' }); }
   };
 
+  // ---------------- VALORACIÓN / REPETIR (registro) ----------------
+  OM.drawRating = function (ctx, R, x, y) {
+    const G = OM.G; if (!R || !R.log) return;
+    const w = 140;
+    OM.UI.panel(ctx, x, y, w, 96, 'dark');
+    OM.FONT.draw(ctx, '¿CÓMO FUE?', x + w / 2, y + 7, { color: '8', align: 'center', shadow: '0' });
+    OM.FONT.draw(ctx, 'queda en el REGISTRO', x + w / 2, y + 19, { color: '5', align: 'center' });
+    [['facil', 'FÁCIL', 'green'], ['justa', 'JUSTA', 'blue'], ['dificil', 'DIFÍCIL', 'red']].forEach(([k, lbl, st], i) => {
+      const on = R.log.rating === k;
+      if (G.button(x + 10, y + 32 + i * 20, w - 20, 16, (on ? '> ' : '') + lbl + (on ? ' <' : ''), on ? st : 'dark')) OM.LOG.rate(R, k);
+    });
+  };
+  OM.replaySeed = function (R) {
+    if (!R) return;
+    OM.clearRun();
+    OM.R = OM.Run.create(R.cue, R.seed);
+    OM.LOG.startRun(OM.R, 'replay');
+    OM.META.runs++; OM.saveMeta();
+    OM.go('map');
+  };
+
   // ---------------- TÍTULO ----------------
   OM.SCENES.title = {
     enter() { OM.music('menu'); this.opts = false; this.saved = OM.hasRun(); },
@@ -46,7 +67,8 @@ OM.SCENES = OM.SCENES || {};
         if (G.button(bx, y + 4, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
         y += 30;
       }
-      if (G.button(bx, y, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
+      if (G.button(bx, y, 82, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
+      if (G.button(bx + 88, y, 82, 18, 'REGISTRO', 'blue')) OM.go('stats');
       y += 22;
       if (G.button(bx, y, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
       if (G.button(bx + 88, y, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
@@ -87,6 +109,7 @@ OM.SCENES = OM.SCENES || {};
       if (G.button(CX - 90, 296, 180, 24, 'DESCENDER', 'red', false, 'Enter')) {
         OM.clearRun();
         OM.R = OM.Run.create(OM.CUES[this.sel].id);
+        OM.LOG.startRun(OM.R);
         OM.R.jokers.forEach((J) => (OM.META.seen[J.id] = 1));
         OM.META.runs++; OM.saveMeta();
         OM.go('map');
@@ -164,6 +187,7 @@ OM.SCENES = OM.SCENES || {};
         R.rerollCost = 5;
       }
       this.save();
+      OM.LOG.shopStart(R, this.shop, !!(saved && saved.slots));
       this.sel = null; this.pack = null; this.paused = false; this.showBalls = false;
       OM.HUD.sel = null;
       OM.music('shop');
@@ -222,11 +246,13 @@ OM.SCENES = OM.SCENES || {};
       });
       // botones inferiores
       const by = AREA.y + AREA.h - 34;
-      if (G.button(AREA.x + 20, by, 150, 24, 'SIGUIENTE MESA', 'red')) { OM.go('map'); }
+      if (G.button(AREA.x + 20, by, 150, 24, 'SIGUIENTE MESA', 'red')) { OM.LOG.shopEnd(R); OM.go('map'); }
       if (G.button(AREA.x + 180, by, 110, 24, 'REROLL $' + R.rerollCost, 'green', R.money < R.rerollCost)) {
+        const cost = R.rerollCost;
         R.money -= R.rerollCost; R.rerollCost++;
         const keepPacks = S.packs;
         this.shop = OM.Run.makeShop(R); this.shop.packs = keepPacks; this.sel = null;
+        OM.LOG.reroll(R, this.shop, cost);
         OM.sfx('reroll'); this.save();
       }
       OM.FONT.draw(ctx, 'Interés: {h}$1{/} por cada {h}$5{/} (máx. {h}$' + R.interestCap + '{/})', AREA.x + AREA.w / 2, by - 16, { color: '6', align: 'center' });
@@ -250,6 +276,7 @@ OM.SCENES = OM.SCENES || {};
       const R = OM.R;
       setTimeout(() => this.save(), 0); // tras aplicar la compra
       R.money -= o.price; o.sold = true; this.sel = null;
+      OM.LOG.buy(R, o);
       OM.sfx('buy');
       OM.FX.burst(OM.IN.mx, OM.IN.my, 'gold', 10);
       if (o.type === 'joker') { R.jokers.push(o.J); OM.META.seen[o.id] = 1; OM.saveMeta(); }
@@ -281,12 +308,13 @@ OM.SCENES = OM.SCENES || {};
         if (hov) { G.cursor = 'grab'; G.tooltip(x + w / 2, y + h * 1.5 + 30, name, desc, color, sub); }
         const full = big && OM.Run.jokersFull(R) && op.J.edition !== 'negativo';
         if (G.button(x + w / 2 - 30, y + h + 36, 60, 16, full ? 'LLENO' : 'ELEGIR', 'green', full || !!OM.HUD.picker)) {
+          OM.LOG.packPick(R, P.kind, P.opts, op.id + (op.J && op.J.edition ? '+' + op.J.edition : ''));
           this.pack = null;
           if (big) { R.jokers.push(op.J); OM.META.seen[op.id] = 1; OM.saveMeta(); OM.sfx('buy'); }
           else OM.HUD.useItem(R, -1, 'shop', OM.SCENES.map.api, op.id);
         }
       });
-      if (G.button(CX - 40, 300, 80, 16, 'SALTAR', 'dark')) this.pack = null;
+      if (G.button(CX - 40, 300, 80, 16, 'SALTAR', 'dark')) { OM.LOG.packPick(R, P.kind, P.opts, null); this.pack = null; }
     },
   };
 
@@ -332,6 +360,12 @@ OM.SCENES = OM.SCENES || {};
       this.arg = arg || {};
       OM.music('gameover');
       if (!this.arg.silent) OM.sfx('lose'); // si venimos de la mesa, ya sonó al perder
+      const R = OM.R;
+      if (R && R.log) {
+        const tb = R.log.tables[R.log.tables.length - 1];
+        if (tb && (tb.won === null || tb.won === undefined)) { tb.won = false; tb.abandoned = true; }
+        OM.LOG.endRun(R, this.arg.reason === 'quit' ? 'quit' : 'lose');
+      }
       OM.clearRun(); OM.saveMeta();
     },
     draw(ctx, t) {
@@ -358,13 +392,17 @@ OM.SCENES = OM.SCENES || {};
       R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 254, { t, edition: J.edition }));
       if (G.button(CX - 130, 322, 124, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
       if (G.button(CX + 6, 322, 124, 22, 'VOLVER AL MENÚ', 'dark', false, 'Escape')) OM.go('title');
+      OM.drawRating(ctx, R, 486, 96);
+      if (G.button(14, 96, 140, 18, 'REPETIR SEMILLA', 'dark')) OM.replaySeed(R);
+      OM.FONT.draw(ctx, 'Misma semilla y taco:', 84, 120, { color: '5', align: 'center' });
+      OM.FONT.draw(ctx, 'tienda y jefes iguales', 84, 131, { color: '5', align: 'center' });
     },
   };
 
   // ---------------- VICTORIA ----------------
   OM.SCENES.victory = {
     drawsFX: true,
-    enter() { OM.META.wins++; OM.saveMeta(); OM.clearRun(); OM.music('menu'); OM.sfx('win_table'); this.t0 = OM.time; },
+    enter() { OM.META.wins++; OM.saveMeta(); OM.LOG.endRun(OM.R, 'victory'); OM.clearRun(); OM.music('menu'); OM.sfx('win_table'); this.t0 = OM.time; },
     draw(ctx, t) {
       const R = OM.R, G = OM.G;
       OM.UI.drawBackground(ctx, t, 'victory');
@@ -379,6 +417,7 @@ OM.SCENES = OM.SCENES || {};
         OM.FONT.draw(ctx, r[1], CX + 110, 150 + i * 16, { color: '8', align: 'right' });
       });
       R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 226, { t, wobble: true, seed: i, edition: J.edition }));
+      OM.drawRating(ctx, R, 486, 140);
       if (G.button(CX - 150, 316, 140, 22, 'MODO INFINITO', 'gold')) { R.infinite = true; OM.go('shop'); }
       if (G.button(CX + 10, 316, 140, 22, 'MENÚ', 'dark')) OM.go('title');
     },

@@ -13,7 +13,10 @@ src/art/table_art.js    OM.TABLE — mesa, troneras, bolas, taco, guía, fondos 
 src/audio/audio.js      OM.AUDIO — SFX y música procedurales WebAudio (agente audio)
 src/game/data.js        Datos de diseño: comodines (con hooks), objetos, tacos, jefes, círculos
 src/game/physics.js     OM.Physics — bolas, bandas, mandíbulas, troneras, trazado de guía, saque
-src/game/run.js         OM.Run — RNG con semilla, estado de partida, puntuación Fichas×Mult, tienda
+src/game/run.js         OM.Run — RNG con semilla, estado de partida, puntuación Fichas×Mult, tienda, guardado
+src/game/telemetry.js   OM.LOG — registro de cada partida (ver docs/TELEMETRY.md)
+src/game/analytics.js   OM.Analytics — métricas y banderas sobre los registros
+src/game/scene_stats.js Escena REGISTRO
 src/game/main.js        Bucle, entrada (ratón/táctil/teclado), GUI inmediata OM.G, persistencia META
 src/game/hud.js         OM.HUD — panel izquierdo, fila de comodines (arrastrar/vender), consumibles, selector de bolas
 src/game/scene_table.js Escena de mesa (colocar → apuntar → tiro → simulación → puntuación animada → cobro)
@@ -34,3 +37,4 @@ Cada comodín es un objeto de datos con hooks (`onBall`, `onShot`, `onAfter`, `o
 - `node tools/balance.js` — puntos medios por mesa para calibrar objetivos.
 - `node tools/playtest.js <dir>` — recorre el juego en Chromium y guarda capturas + errores.
 - `node tools/serve.js [puerto]` — servidor estático local (por defecto 8088).
+- `node tools/bot.js --runs 500` — bot de balance (registros en formato OM.LOG) · `node tools/analyze.js <json>` — informe.

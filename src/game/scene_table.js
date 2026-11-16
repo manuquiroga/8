@@ -102,6 +102,7 @@ OM.SCENES = OM.SCENES || {};
       if (boss) { setTimeout(() => OM.sfx('boss'), 400); OM.FX.flash('a', 0.35, 0.6); }
       OM.HUD.sel = null;
       T.intro = 1.6;
+      OM.LOG.tableStart(R, T);
     },
 
     api: {
@@ -337,6 +338,7 @@ OM.SCENES = OM.SCENES || {};
       shotIndex: T.shotIndex, shotsLeft: T.shots, isBreak: cur.isBreak, ballsLeft: remainingObj, cursed, clear, streak: T.streak, spun: cur.spun,
     };
     const S = OM.Run.score(R, shot);
+    OM.LOG.shot(R, shot, S, { power: Math.round(T.strikePow * 100) / 100, spinF: T.spin.f, spinS: T.spin.s, left: T.shots });
     T.S = S;
     T.play = { i: 0, timer: 0.25, events: S.events, done: false, totalT: 0 };
     T.chips = 0; T.mult = 0; T.multStr = '0'; T.shotName = ''; T.shotColor = '7';
@@ -444,7 +446,7 @@ OM.SCENES = OM.SCENES || {};
     }
     // victoria
     if (T.score >= T.target) { win(); return; }
-    if (T.shots <= 0) { T.phase = 'lost'; T.endT = 1.8; OM.sfx('lose'); OM.FX.flash('a', 0.5, 1); OM.music('gameover'); return; }
+    if (T.shots <= 0) { OM.LOG.tableEnd(R, false, T); T.phase = 'lost'; T.endT = 1.8; OM.sfx('lose'); OM.FX.flash('a', 0.5, 1); OM.music('gameover'); return; }
     // mesa vacía → nuevo triángulo
     const left = T.W.balls.filter((b) => b.alive && b.num !== 0).length;
     if (left === 0) {
@@ -470,6 +472,7 @@ OM.SCENES = OM.SCENES || {};
     OM.FX.burst(F.x + F.w / 2, F.y + F.h / 2, 'gold', 40);
     T.cashout = { lines: OM.Run.cashout(R, T.shots), t: 0 };
     T.cashout.total = T.cashout.lines.reduce((a, l) => a + l.v, 0);
+    OM.LOG.tableEnd(R, true, T, T.cashout.total);
     try { OM.AUDIO.intensity(0); } catch (e) {}
   }
 
