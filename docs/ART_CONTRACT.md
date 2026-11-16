@@ -14,7 +14,7 @@ Este documento es la interfaz entre el motor (`src/game/*`) y los módulos de ar
 
 ## Orden de carga
 ```
-src/core/px.js → src/art/font.js → src/art/ui_art.js → src/art/fx.js → src/art/cards_art.js
+src/core/px.js → src/art/font.js → src/art/ui_art.js → src/art/fx.js → src/art/cards_art.js → cards_art_v11.js → cards_art_v13.js
 → src/art/table_art.js → src/audio/audio.js → src/game/data.js → src/game/*.js
 ```
 `OM.ART_INIT = OM.ART_INIT || []` — cada módulo de arte empuja su función de inicialización.

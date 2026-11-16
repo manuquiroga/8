@@ -62,7 +62,7 @@ OM.HUD = (function () {
       const jig = H.jiggle[J.uid] || 0;
       if (jig > 0) H.jiggle[J.uid] = jig - 1 / 60;
       const sc = 1 + Math.max(0, jig) * 0.6;
-      OM.CARDS.drawJoker(ctx, J.def, x, y - (sel ? 6 : 0), { t, hover: hov || dragging, selected: sel, scale: sc, wobble: !dragging, seed: i, edition: J.edition });
+      OM.CARDS.drawJoker(ctx, J.def, x, y - (sel ? 6 : 0), { t, hover: hov || dragging, selected: sel, scale: sc, wobble: !dragging, seed: i, edition: J.edition, alpha: OM.Run.asleep(R, i) ? 0.35 : 1 });
       if (hov && IN.pressed && opts.interactive !== false) { H.drag = { idx: i, ox: IN.mx - x, sx: IN.mx, moved: false }; }
       if (hov && IN.released && H.drag === null && opts.interactive !== false && !IN.consumed) {
         H.sel = sel ? null : { type: 'joker', idx: i }; IN.consumed = true; OM.sfx('card_flip');

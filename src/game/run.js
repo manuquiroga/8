@@ -41,7 +41,7 @@ OM.Run = (function () {
     const rng = OM.RNG(seed);
     const R = {
       seed, seedStr: OM.seedToStr(seed), rng, cue: cueId,
-      money: cue.money, baseShots: cue.shots, interestCap: cue.interestCap || 5,
+      money: cue.money, baseShots: cue.shots, interestCap: cue.interestCap != null ? cue.interestCap : 5,
       jokerSlots: 5 + (cue.slots || 0), itemSlots: 2,
       jokers: [], items: [],
       balls: [], // el "mazo": 15 bolas con grabados
@@ -52,6 +52,12 @@ OM.Run = (function () {
     };
     for (let n = 1; n <= 15; n++) R.balls.push({ num: n, kind: 'normal' });
     if (cue.joker) R.jokers.push(newJoker(cue.joker));
+    // v1.3: comodín inicial al azar de una rareza (Taco del Pacto) y niveles de tiro iniciales (Taco de Ébano)
+    if (cue.randomJoker) {
+      const pool = OM.JOKERS.filter((j) => j.rarity === cue.randomJoker && OM.isUnlocked(j.unlock) && !j.copy);
+      R.jokers.push(newJoker(rng.pick(pool).id));
+    }
+    if (cue.levels) Object.keys(R.levels).forEach((k) => (R.levels[k] = cue.levels));
     if (cue.randomEng) {
       const kinds = ['oro', 'cristal', 'plomo', 'fuego', 'holo', 'bomba'];
       rng.shuffle(R.balls.filter((b) => b.num !== 8)).slice(0, cue.randomEng).forEach((b) => (b.kind = rng.pick(kinds)));
@@ -83,9 +89,14 @@ OM.Run = (function () {
     if (J.def.copy) { if (depth > 5) return null; return resolve(R, i + 1, depth + 1); }
     return J;
   }
+  // La Durmiente: el comodín de más a la izquierda no tiene efecto
+  function asleep(R, i) { return i === 0 && boss(R) === 'durmiente'; }
+  // hooks de mesa (onTableStart/onTableEnd) respetando a La Durmiente
+  function tableHook(R, hook) { R.jokers.forEach((J, i) => { if (!asleep(R, i) && J.def[hook]) J.def[hook](R, J); }); }
   function mods(R) {
     const m = { breakMul: 1, extraShots: 0, pocketMul: 1, powerMul: 1, guide: 1, pocketPull: 1, noScratch: false, eightSafe: false, scratchScores: false, retriggerFirst: false, refundMiss: false };
     R.jokers.forEach((_, i) => {
+      if (asleep(R, i)) return;
       const J = resolve(R, i); if (!J || !J.def.mods) return;
       const d = J.def.mods;
       if (d.extraShots) m.extraShots += d.extraShots;
@@ -106,6 +117,7 @@ OM.Run = (function () {
     const bossId_ = boss(R);
     const ev = [];
     const S = Object.assign({}, shot, { chips: 0, mult: 0, events: ev });
+    S.R = R; // v1.3: comodines que miran el dinero, niveles o círculo
     S.add = (o, J) => {
       const src = J ? { type: 'joker', uid: J.uid } : S._src;
       if (o.chips) { S.chips += o.chips; ev.push({ k: 'chips', v: o.chips, src }); }
@@ -115,6 +127,7 @@ OM.Run = (function () {
     };
     const callJ = (hook, ...args) => {
       R.jokers.forEach((inst, i) => {
+        if (asleep(R, i)) return;
         const J = resolve(R, i);
         if (!J || !J.def[hook]) return;
         // "this" = carta que se ilumina (la copia si es Espejo Roto); J = dueño del estado
@@ -147,13 +160,14 @@ OM.Run = (function () {
     S.mult = T.mult + T.lvlMult * (lvl - 1);
     ev.push({ k: 'type', v: typeId, lvl, chips: S.chips, mult: S.mult });
     // CARGA DEL SAQUE (v1.2): se gasta en el primer tiro que puntúa
-    if (shot.carga > 0) {
+    const espina = bossId_ === 'espina';
+    if (shot.carga > 0 && !espina) {
       ev.push({ k: 'msg', v: 'CARGA DEL SAQUE', color: 'q' });
       S.add({ mult: shot.carga });
       S.usedCarga = true;
     }
     // RACHA (v1.1): cada tiro anterior seguido que embocó suma +1 Mult (máx. +8)
-    if (shot.streak > 0) {
+    if (shot.streak > 0 && !espina) {
       ev.push({ k: 'msg', v: 'RACHA x' + (shot.streak + 1), color: 'v' });
       S.add({ mult: Math.min(8, shot.streak) });
     }
@@ -168,7 +182,7 @@ OM.Run = (function () {
         if (gl) ev.push({ k: 'msg', v: 'DEVORADA', color: 'b', src: S._src });
         else S.add({ chips: base });
         if (b.banked) S.add({ chips: 10 });
-        const k = b.ball.kind;
+        const k = bossId_ === 'inquisidora' ? 'normal' : b.ball.kind;
         if (k === 'oro') S.add({ money: 3 });
         if (k === 'plomo') S.add({ chips: 50 });
         if (k === 'holo') S.add({ mult: 10 });
@@ -181,12 +195,14 @@ OM.Run = (function () {
     });
     callJ('onShot');
     // ediciones: se aplican tras los comodines, de izquierda a derecha
-    R.jokers.forEach((J) => {
+    R.jokers.forEach((J, i) => {
+      if (asleep(R, i) || bossId_ === 'inquisidora') return;
       if (J.edition === 'foil') S.add({ chips: 50 }, J);
       else if (J.edition === 'holo') S.add({ mult: 10 }, J);
       else if (J.edition === 'poli') S.add({ xmult: 1.5 }, J);
     });
-    if (bossId_ === 'sanguijuela') ev.push({ k: 'money', v: -1, src: { type: 'boss' } });
+    if (bossId_ === 'sanguijuela') ev.push({ k: 'money', v: -2, src: { type: 'boss' } });
+    if (bossId_ === 'tasador') { const cut = Math.ceil(S.chips / 2); S.chips -= cut; ev.push({ k: 'msg', v: 'EL TASADOR: FICHAS /2', color: 'b' }); ev.push({ k: 'chips', v: -cut, src: { type: 'boss' } }); }
     S.total = Math.floor(S.chips * S.mult);
     return S;
   }
@@ -209,7 +225,7 @@ OM.Run = (function () {
 
   // efectos de comodín que no dependen de embocar (dinero por tiro, etc.) se ejecutan en score.
   function afterShot(R, S) {
-    R.jokers.forEach((J) => { if (J.def.onAfter) J.def.onAfter.call(J, S, J); });
+    R.jokers.forEach((J, i) => { if (!asleep(R, i) && J.def.onAfter) J.def.onAfter.call(J, S, J); });
   }
 
   // ---- ECONOMÍA ----
@@ -308,5 +324,5 @@ OM.Run = (function () {
     return { R, scene: o.scene, extra: o.extra };
   }
 
-  return { breakShot, create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker, rollEdition, slots, jokersFull, serialize, deserialize };
+  return { asleep, tableHook, breakShot, create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker, rollEdition, slots, jokersFull, serialize, deserialize };
 })();

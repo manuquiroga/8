@@ -80,3 +80,25 @@
 - Objetivos reajustados a 140 / 460 / 1.100 / 2.400 / 4.800 / 9.200. Victorias: flojo 0,8%, medio 5%, bueno 16%.
 - Nuevas métricas en el análisis: justicia del saque (pasa la mesa según cómo salió el saque) y la bandera SAQUE.
 - `tools/bot.js --oldbreak` juega con las reglas v1.1 para comparar, y `--carga k` escala la carga.
+
+## 2026-11-16 · v1.3 — Más comodines, jefes y tacos balanceados
+**Comodines nuevos (11)**
+- Comunes: El Paciente (+3 Mult por tiro ya usado), Diezmo (+1 Mult cada $5), Barrendero (+8 Fichas por bola fuera de la mesa), Pares Malditos (+4 Mult por bola par).
+- Raros: A la Tercera (cada 3er tiro x3), Sangría (+1 Mult permanente por tiro que no puntúa), Matrimonio Maldito (lisa + rayada en el mismo tiro: x2.5), Codicia (x0.05 por cada $, máx. x3), El Astrólogo (al ganar mesa sube un tiro de nivel).
+- Épico: Eclipse (x0.1 por cada nivel de tiro subido). Legendario: La Corona Hueca (x2 +x0.5 por Círculo superado).
+- Los comodines reciben `S.R` (la partida) en los hooks de puntuación. Nada de RNG dentro de `onShot`: la telemetría vuelve a puntuar el tiro para medir aportes.
+- Bot: Eclipse salió ROTO a x0.3 (68% de los puntos) → x0.1. Sangría a +2 aportaba 44% → +1.
+
+**Jefes nuevos (4)** — bot medio, % de mesas superadas:
+- El Tasador (Fichas /2 al final del tiro) 80% · La Inquisidora (sin grabados ni ediciones) 83% · La Espina (sin RACHA ni CARGA) 85% · La Durmiente (el comodín de más a la izquierda no tiene efecto; se ve apagado y se puede reordenar) 87%.
+- La Sanguijuela pasa a -$2 por tiro (sigue FÁCIL en el bot porque su castigo es económico, no de mesa).
+- `OM.Run.tableHook(R, hook)` centraliza onTableStart/onTableEnd y respeta a La Durmiente. El bot ahora también llama onTableEnd.
+
+**Tacos balanceados** — el bot mostró que 4 tiros por mesa hundían cualquier taco (Sangriento 2%, Espectral 1%) y que Usura dominaba (10-13%). Ahora todos tienen 5 tiros salvo Vidrio y compensan con otra cosa:
+- Sangriento: 5 tiros, Tiza Azul, $0 · Espectral: 5 tiros, Blanca Fantasma, $0 · Usura: $6, interés hasta $7.
+- Nuevos: Ébano (tiros a nivel 2, 1 comodín menos), Vidrio (6 tiros, 3 huecos; desbloqueo Círculo IV), Pacto (épico al azar, $0, sin interés; desbloqueo racha x5).
+- Victorias por taco (bot medio, 1000 c/u): Peregrino 8%, Sangriento 7%, Usura 8%, Hueso 6%, Espectral 5%, Ébano 8%, Vidrio 7%, Pacto 9%.
+- Selección de taco: carrusel de 5 con flechas y ←/→.
+
+**Curva**: con más contenido el juego era más fácil (medio 7%). Objetivos IV-VI a 2.500 / 5.100 / 9.800 → victorias flojo 0,9%, medio 6,2%, bueno 17,7%.
+- Arte en `src/art/cards_art_v13.js`; hoja de contacto en `tools/preview_v13.html`.

@@ -75,21 +75,35 @@ OM.SCENES = OM.SCENES || {};
       const seen = Object.keys(M.seen).length;
       const stats = 'Partidas ' + M.runs + '   ·   Victorias ' + M.wins + '   ·   Mejor círculo ' + (M.best ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VI+'][Math.min(6, M.best)] : '-') + '   ·   Récord de tiro ' + OM.fmt(M.bestShot) + '   ·   Comodines ' + seen + '/' + OM.JOKERS.length;
       OM.FONT.draw(ctx, stats, CX, 304, { color: '5', align: 'center' });
-      OM.FONT.draw(ctx, 'v1.1 · M: silenciar música', CX, 345, { color: '3', align: 'center' });
+      OM.FONT.draw(ctx, 'v1.3 · M: silenciar música', CX, 345, { color: '3', align: 'center' });
     },
   };
 
   // ---------------- SELECCIÓN DE TACO ----------------
   OM.SCENES.cues = {
-    enter() { this.sel = 0; },
+    enter() { this.sel = 0; this.off = 0; },
     draw(ctx, t) {
-      const G = OM.G;
+      const G = OM.G, N = OM.CUES.length, VIS = Math.min(5, N);
       OM.UI.drawBackground(ctx, t, 'map');
       OM.FONT.draw(ctx, 'ELIGE TU TACO', CX, 24, { color: '8', size: 2, align: 'center', shadow: '0' });
       OM.FONT.draw(ctx, 'Cada taco cambia las reglas de tu descenso', CX, 46, { color: '6', align: 'center' });
-      const cw = 114, gap = 8, total = OM.CUES.length * cw + (OM.CUES.length - 1) * gap;
+      // v1.3: carrusel (hay más tacos de los que caben)
+      const kp = OM.IN.kp || {};
+      const step = (d) => { let i = this.sel; for (let k = 0; k < N; k++) { i = (i + d + N) % N; if (OM.isUnlocked(OM.CUES[i].unlock)) break; } if (i !== this.sel) { this.sel = i; OM.sfx('card_flip'); } };
+      if (kp.ArrowRight) step(1);
+      if (kp.ArrowLeft) step(-1);
+      if (this.sel < this.off) this.off = this.sel;
+      if (this.sel >= this.off + VIS) this.off = this.sel - VIS + 1;
+      this.off = Math.max(0, Math.min(N - VIS, this.off));
+      const cw = 114, gap = 8, total = VIS * cw + (VIS - 1) * gap;
+      if (N > VIS) {
+        if (this.off > 0 && G.button(4, 160, 14, 24, '<', 'dark')) this.off--;
+        if (this.off + VIS < N && G.button(OM.W - 18, 160, 14, 24, '>', 'dark')) this.off++;
+        OM.FONT.draw(ctx, (this.off + 1) + '-' + (this.off + VIS) + ' de ' + N, CX, 278, { color: '5', align: 'center' });
+      }
       OM.CUES.forEach((c, i) => {
-        const x = Math.round(CX - total / 2 + i * (cw + gap)), y = 72;
+        if (i < this.off || i >= this.off + VIS) return;
+        const x = Math.round(CX - total / 2 + (i - this.off) * (cw + gap)), y = 72;
         const open = OM.isUnlocked(c.unlock);
         const sel = this.sel === i, hov = G.inside(x, y, cw, 200);
         ctx.globalAlpha = open ? 1 : 0.55;

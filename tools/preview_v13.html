@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>8 — preview v1.3</title>
+<style>html, body { margin: 0; background: #07050d; overflow: hidden; } canvas { display: block; width: 640px; height: 360px; image-rendering: pixelated; }</style>
+</head>
+<body>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/game/data.js"></script>
+<script src="../src/art/cards_art.js"></script>
+<script src="../src/art/cards_art_v11.js"></script>
+<script src="../src/art/cards_art_v13.js"></script>
+<script>
+// Hoja de contacto del contenido v1.3: comodines, jefes y tacos nuevos a x3.
+(function () {
+  OM.ART_INIT.forEach((f) => f());
+  const ctx = document.getElementById('c').getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const P = OM.PAL;
+  ctx.fillStyle = P['1']; ctx.fillRect(0, 0, 640, 360);
+  const names = ['paciente', 'diezmo', 'barrendero', 'pares', 'tercera', 'sangria', 'matrimonio', 'codicia', 'astrologo', 'eclipse', 'corona'].map((n) => 'joker_' + n)
+    .concat(['tasador', 'inquisidora', 'durmiente', 'espina'].map((n) => 'boss_' + n))
+    .concat(['ebano', 'vidrio', 'pacto'].map((n) => 'cue_' + n));
+  names.forEach((n, i) => {
+    const x = 8 + (i % 6) * 104, y = 6 + Math.floor(i / 6) * 118, s = 3;
+    const sp = OM.PX.get(n);
+    ctx.fillStyle = P['2']; ctx.fillRect(x - 1, y - 1, 98, 98);
+    if (sp) ctx.drawImage(sp.c, x, y, sp.w * s, sp.h * s); else { ctx.fillStyle = P.b; ctx.fillRect(x, y, 20, 20); }
+    ctx.fillStyle = P['6']; ctx.font = '8px monospace'; ctx.fillText(n, x, y + 108);
+  });
+})();
+</script>
+</body>
+</html>

@@ -50,7 +50,7 @@ function playTable(R) {
   const T = { target: OM.Run.target(R), shots: R.baseShots + M.extraShots - (boss === 'reloj' ? 1 : 0), boss, score: 0, refunded: false, streak: 0 };
   // consumibles de mesa: la Tiza se usa al empezar
   for (let i = R.items.length - 1; i >= 0; i--) if (R.items[i] === 'tiza') { OM.LOG.item(R, 'tiza', 'table'); R.items.splice(i, 1); T.shots++; }
-  R.jokers.forEach((J) => J.def.onTableStart && J.def.onTableStart(R, J));
+  OM.Run.tableHook(R, 'onTableStart');
   OM.LOG.tableStart(R, T);
   let onTable = R.balls.slice(), shotIndex = 0, carga = 0;
   const FREE = !args.oldbreak; // --oldbreak: reglas de saque v1.1 (para comparar)
@@ -102,6 +102,7 @@ function playTable(R) {
   let cash = 0;
   if (won) {
     R.stats.tables++;
+    OM.Run.tableHook(R, 'onTableEnd');
     cash = OM.Run.cashout(R, T.shots).reduce((a, l) => a + l.v, 0);
     OM.LOG.tableEnd(R, true, T, cash);
     R.money += cash; R.stats.money += cash;

@@ -96,7 +96,7 @@ OM.SCENES = OM.SCENES || {};
       const c = ensureCue(false);
       c.x = HEAD_X - 30; c.y = F.y + F.h / 2;
       T.angle = 0;
-      R.jokers.forEach((J) => J.def.onTableStart && J.def.onTableStart(R, J));
+      OM.Run.tableHook(R, 'onTableStart');
       OM.FX.clear();
       OM.music(boss ? 'boss' : 'table');
       if (boss) { setTimeout(() => OM.sfx('boss'), 400); OM.FX.flash('a', 0.35, 0.6); }
@@ -380,7 +380,7 @@ OM.SCENES = OM.SCENES || {};
           break;
         }
         case 'carga': OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2 + 4, 'CARGA +' + e.v + ' MULT', 'q', { size: 2 }); OM.sfx('mult', { pitch: 1.2 }); OM.FX.burst(F.x + F.w / 2, F.y + F.h / 2, 'spark', 12); P.timer = 0.5; break;
-        case 'chips': T.chips += e.v; T.bump.c = 1; OM.FX.popText(p.x, p.y, '+' + OM.fmt(e.v), 'q'); OM.sfx('chips', { pitch }); break;
+        case 'chips': T.chips += e.v; T.bump.c = 1; OM.FX.popText(p.x, p.y, (e.v < 0 ? '-' : '+') + OM.fmt(Math.abs(e.v)), e.v < 0 ? 'b' : 'q'); OM.sfx('chips', { pitch }); break;
         case 'mult': T.mult += e.v; T.multStr = fmtMult(T.mult); T.bump.m = 1; OM.FX.popText(p.x, p.y, '+' + e.v + ' Mult', 'c'); OM.sfx('mult', { pitch }); break;
         case 'xmult': T.mult *= e.v; T.multStr = fmtMult(T.mult); T.bump.m = 1.6; OM.FX.popText(p.x, p.y, 'x' + (Math.round(e.v * 100) / 100), 'c', { size: 2 }); OM.sfx('xmult', { pitch }); OM.FX.shake(2, 0.15); P.timer += 0.08; break;
         case 'money': R.money += e.v; OM.FX.popText(p.x, p.y - 8, (e.v > 0 ? '+$' : '-$') + Math.abs(e.v), 'h'); if (e.v > 0) { OM.sfx('coin'); OM.FX.burst(p.x, p.y, 'gold', 6); } break;
@@ -469,7 +469,7 @@ OM.SCENES = OM.SCENES || {};
     T.phase = 'won';
     R.stats.tables++;
     if (T.boss) { OM.META.bosses = (OM.META.bosses || 0) + 1; OM.saveMeta(); }
-    R.jokers.forEach((J) => J.def.onTableEnd && J.def.onTableEnd(R, J));
+    OM.Run.tableHook(R, 'onTableEnd');
     OM.sfx('win_table');
     OM.FX.burst(F.x + F.w / 2, F.y + F.h / 2, 'gold', 40);
     T.cashout = { lines: OM.Run.cashout(R, T.shots), t: 0 };
