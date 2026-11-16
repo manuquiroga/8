@@ -69,7 +69,6 @@ OM.SCENES = OM.SCENES || {};
       const G = OM.G, M = OM.META;
       OM.UI.drawBackground(ctx, t, 'title');
       OM.UI.logo(ctx, CX, 20, t);
-      OM.FONT.draw(ctx, 'pool arcade 1 contra 1 en el bar del infierno', CX, 184, { color: '6', align: 'center', shadow: '0' });
       const bw = 170, bx = CX - bw / 2;
       let y = 200;
       if (G.button(bx, y, bw, 22, 'JUGAR CONTRA BOT', 'red', false, 'Enter')) OM.go('setup', { vs: 'bot' });
@@ -81,11 +80,6 @@ OM.SCENES = OM.SCENES || {};
       y += 20;
       if (G.button(bx, y, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
       if (G.button(bx + 88, y, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
-      const seen = OM.JOKERS.filter((j) => M.seen[j.id]).length;
-      const stats = 'Series ' + (M.series || 0) + '   ·   Ganadas ' + (M.wins || 0) + '   ·   Mejor serie ' + OM.fmt(M.bestPts || 0) + '   ·   Mejor tiro ' + OM.fmt(M.bestShot || 0) + '   ·   Comodines ' + seen + '/' + OM.JOKERS.length;
-      ctx.globalAlpha = 0.7; ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 303, OM.W, 14); ctx.fillRect(0, 342, OM.W, 14); ctx.globalAlpha = 1;
-      OM.FONT.draw(ctx, stats, CX, 306, { color: '6', align: 'center' });
-      OM.FONT.draw(ctx, 'v3.0 · 5 partidas, gana quien sume más puntos · M: silenciar música', CX, 345, { color: '5', align: 'center' });
     },
   };
 
@@ -161,13 +155,18 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- ONLINE: crear sala / unirse / sala de espera ----------------
   OM.SCENES.online = {
-    enter() {
+    enter(arg) {
       const M = OM.META;
-      this.state = 'menu'; this.code = ''; this.err = null; this.ready = false; this.busy = false;
+      this.state = 'menu'; this.code = ''; this.err = null; this.ready = false; this.busy = false; this.copied = 0;
       this.name = M.name || 'Jugador'; this.cue = Math.max(0, OM.CUES.findIndex((c) => c.id === M.cue));
       this.mode = OM.MODES[M.mode] ? M.mode : '8'; this.hello = 0; this.started = false;
       field = null;
       OM.NET.close();
+      if (arg && arg.join && OM.NET.available()) this.join(arg.join); // entrando por link: (sitio)/CÓDIGO
+    },
+    join(code) {
+      this.code = code; this.busy = true; this.err = null;
+      OM.NET.join(code).then(() => { this.state = 'lobby'; this.busy = false; }).catch((e) => { this.err = e.message || 'No se pudo entrar'; this.busy = false; });
     },
     sendHello() { OM.NET.send({ t: 'hello', name: this.name.trim() || 'Jugador', cue: OM.CUES[this.cue].id, ready: this.ready }); if (OM.NET.role === 'h') OM.NET.send({ t: 'cfg', mode: this.mode }); },
     begin(st) {
@@ -200,10 +199,7 @@ OM.SCENES = OM.SCENES || {};
         }
         OM.FONT.draw(ctx, 'o únete con el código de 4 letras de tu rival:', CX, 166, { color: '6', align: 'center' });
         this.code = textField(ctx, 'code', CX - 58, 182, 116, this.code, 4, true);
-        if (G.button(CX - 90, 208, 180, 24, 'UNIRSE', 'green', this.busy || this.code.length < 4)) {
-          this.busy = true; this.err = null;
-          N.join(this.code).then(() => { this.state = 'lobby'; this.busy = false; }).catch((e) => { this.err = e.message || 'No se pudo entrar'; this.busy = false; });
-        }
+        if (G.button(CX - 90, 208, 180, 24, this.busy && this.code.length === 4 ? 'ENTRANDO...' : 'UNIRSE', 'green', this.busy || this.code.length < 4)) this.join(this.code);
         if (G.button(12, 334, 70, 18, 'VOLVER', 'dark', false, field ? null : 'Escape')) back();
         return;
       }
@@ -214,9 +210,17 @@ OM.SCENES = OM.SCENES || {};
       if (!host && N.cfg) this.mode = N.cfg.mode;
       if (N.start) { this.begin(N.start); return; }
       if (N.error) this.err = N.error;
+      const link = N.link(N.code);
       OM.FONT.draw(ctx, 'SALA', CX - 40, 44, { color: '6', align: 'right' });
       OM.FONT.draw(ctx, N.code, CX, 36, { color: 'i', size: 2, align: 'center', shadow: '0', wave: 1, t });
-      OM.FONT.draw(ctx, N.peer ? 'rival conectado' : 'esperando al rival: pásale este código', CX, 60, { color: N.peer ? 'm' : '6', align: 'center' });
+      if (link && host) {
+        this.copied = Math.max(0, this.copied - 1 / 60);
+        if (G.button(CX + 40, 36, 90, 16, this.copied ? '¡COPIADO!' : 'COPIAR LINK', this.copied ? 'green' : 'blue')) {
+          const ok = () => { this.copied = 2; };
+          try { navigator.clipboard.writeText(link).then(ok, () => window.prompt('Copia este link:', link)); } catch (e) { window.prompt('Copia este link:', link); }
+        }
+      }
+      OM.FONT.draw(ctx, N.peer ? 'rival conectado' : link ? 'esperando al rival: pásale el link ' + link.replace(/^https?:\/\//, '') : 'esperando al rival: pásale este código', CX, 60, { color: N.peer ? 'm' : '6', align: 'center' });
       // mi lado
       const colMe = PCOL[N.me()], colRv = PCOL[1 - N.me()];
       const draw = (x, title, col, name, cueId, ready, mine) => {

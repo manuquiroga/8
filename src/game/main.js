@@ -170,7 +170,9 @@ window.OM = window.OM || {};
   OM.boot = function () {
     (OM.ART_INIT || []).forEach((fn) => { try { fn(); } catch (e) { console.error('ART_INIT', e); } });
     document.fonts && document.fonts.ready;
-    OM.go('title', null, null);
+    const room = OM.NET && OM.NET.codeFromUrl();
+    if (room) { try { history.replaceState(null, '', location.protocol === 'file:' ? location.pathname : '/'); } catch (e) {} }
+    OM.go(room ? 'online' : 'title', room ? { join: room } : null, null);
     requestAnimationFrame((n) => { last = n; requestAnimationFrame(frame); });
   };
 })();

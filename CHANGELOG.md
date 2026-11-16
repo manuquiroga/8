@@ -5,6 +5,8 @@ Cambios del juego pensados para jugadores. Los detalles técnicos y los números
 ## 3.0 — Pool arcade 1v1 · 2026-11-16 (sin publicar, en playtest)
 
 ### Online sin servidor (3.0c)
+- **Entrar por link**: el anfitrión toca COPIAR LINK y el rival abre `(sitio)/CÓDIGO` para entrar directo a la sala.
+- Pantalla de inicio sin textos de relleno. Favicon de bola 8.
 - El online pasa a ser de navegador a navegador (PeerJS): ya no hace falta correr `node tools/serve.js` para jugar con alguien; basta con abrir el juego publicado y compartir el código de sala.
 - Si el rival se cae, se avisa a los pocos segundos.
 

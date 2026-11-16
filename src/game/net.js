@@ -23,6 +23,13 @@ OM.NET = (function () {
 
   N.available = () => typeof window.Peer === 'function' && typeof window.RTCPeerConnection === 'function';
   N.me = () => (N.role === 'g' ? 1 : 0);
+  // link para invitar: (sitio)/CÓDIGO. Solo existe si el juego está publicado en una web (no como archivo suelto).
+  N.link = (code) => (code && /^https?:$/.test(location.protocol) ? location.origin + '/' + code : null);
+  // código de sala en la dirección con la que se abrió el juego: /ABCD o #ABCD
+  N.codeFromUrl = () => {
+    const m = location.pathname.match(/^\/([A-Za-z]{4})\/?$/) || location.hash.match(/^#([A-Za-z]{4})$/);
+    return m ? m[1].toUpperCase() : null;
+  };
 
   function reset() { N.inbox = []; N.picks = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
   function handle(m) {

@@ -7,6 +7,7 @@ const T = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', 
 http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p.endsWith('/')) p += 'index.html';
+  else if (/^\/[A-Za-z]{4}$/.test(p)) p = '/index.html'; // (sitio)/CÓDIGO = entrar a la sala
   const f = path.join(root, p);
   if (!f.startsWith(root)) { res.writeHead(403); return res.end(); }
   fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); return res.end('404'); } res.writeHead(200, { 'Content-Type': T[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(d); });
