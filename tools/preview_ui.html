@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>OCHO MALDITO — hoja de contacto UI</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; width: 640px; height: 360px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/art/font.js"></script>
+<script src="../src/art/ui_art.js"></script>
+<script src="../src/art/fx.js"></script>
+<script>
+// Hoja de contacto: fuente, paneles, botones, iconos, valueBoxes, barra, cursores, logo, partículas y popTexts congelados.
+// ?anim=1 para verla animada.
+(OM.ART_INIT || []).forEach((f) => f());
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const F = OM.FONT, U = OM.UI, X = OM.FX;
+const anim = /anim=1/.test(location.search);
+const T0 = 1.3;
+
+function sheet(t) {
+  ctx.fillStyle = OM.PAL['1']; ctx.fillRect(0, 0, 640, 360);
+  // trama de fondo discreta
+  ctx.fillStyle = OM.PAL['2'];
+  for (let y = 0; y < 360; y += 4) for (let x = (y / 4) % 2 * 2; x < 640; x += 4) ctx.fillRect(x, y, 1, 1);
+
+  // ---------------- FUENTE
+  U.panel(ctx, 4, 4, 320, 118, 'dark');
+  F.draw(ctx, 'FUENTE', 12, 11, { size: 2, color: 'h', outline: '0', shadow: '0' });
+  F.draw(ctx, 'tamaño 1 · 5x7', 76, 14, { color: '6' });
+  F.draw(ctx, 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ 0123456789', 12, 32, { color: '7', shadow: '0' });
+  F.draw(ctx, 'abcdefghijklmnñopqrstuvwxyz .,:;!?¡¿\'"()[]', 12, 43, { color: '7', shadow: '0' });
+  F.draw(ctx, '+-x*/%$#<>=_&@  ÁÉÍÓÚÜ áéíóúü', 12, 54, { color: '7', shadow: '0' });
+  F.draw(ctx, '¡Mete la {c}8{/} y {b}MUERE{/}! +4 {c}Mult{/} +30 {q}Fichas{/} {h}$5{/}', 12, 67, { color: '7', shadow: '0' });
+  F.draw(ctx, 'ÑANDÚ 1234', 12, 82, { size: 2, color: '7', outline: '0', shadow: '0' });
+  F.draw(ctx, '¿QUÉ?', 112, 82, { size: 2, color: 'c', outline: '0', shadow: '0' });
+  F.draw(ctx, '$999', 174, 82, { size: 2, color: 'h', outline: '0', shadow: '0' });
+  F.draw(ctx, 'x12', 230, 82, { size: 2, color: 'q', outline: '0', shadow: '0' });
+  F.draw(ctx, '¡MESA LIMPIA!', 12, 102, { size: 2, color: 'm', outline: '0', shadow: '0', wave: 1, t: t });
+  F.draw(ctx, 'MALDICIÓN', 168, 102, { size: 2, color: 'u', outline: '0', shadow: '0' });
+  F.draw(ctx, 'outline', 262, 104, { color: 'i', outline: 'a' });
+
+  // ---------------- LOGO
+  U.logo(ctx, 484, 8, t);
+
+  // ---------------- PANELES
+  const ps = ['dark', 'inset', 'blood', 'gold', 'tooltip'];
+  ps.forEach((s, i) => {
+    const x = 4 + i * 64, y = 126;
+    U.panel(ctx, x, y, 60, 46, s);
+    F.draw(ctx, s, x + 30, y + 19, { align: 'center', color: s === 'gold' ? 'i' : s === 'blood' ? 'd' : '7', shadow: '0' });
+  });
+
+  // ---------------- BOTONES (5 estilos x 4 estados)
+  const bs = ['red', 'blue', 'gold', 'green', 'dark'];
+  const st = ['idle', 'hover', 'down', 'disabled'];
+  bs.forEach((s, i) => st.forEach((state, j) => {
+    U.button(ctx, 4 + i * 64, 178 + j * 21, 60, 19, j === 0 ? s.toUpperCase() : state, state, s);
+  }));
+  // botón grande con fuente display
+  U.button(ctx, 4, 264, 118, 28, 'JUGAR', 'idle', 'red');
+  U.button(ctx, 126, 264, 118, 28, 'TIENDA', 'hover', 'gold');
+  U.button(ctx, 248, 264, 76, 28, 'REROLL $5', 'idle', 'green');
+
+  // ---------------- VALUE BOXES + BARRAS
+  U.panel(ctx, 330, 126, 306, 70, 'dark');
+  F.draw(ctx, 'TIRO DOBLE', 340, 133, { color: '7', shadow: '0' });
+  F.draw(ctx, 'nv.2', 404, 133, { color: '6' });
+  U.valueBox(ctx, 340, 145, 64, 22, 120, 'chips');
+  F.draw(ctx, 'x', 412, 149, { size: 2, color: 'c', outline: '0' });
+  U.valueBox(ctx, 424, 145, 64, 22, 8, 'mult');
+  U.valueBox(ctx, 496, 145, 132, 22, '12.480', 'score');
+  U.valueBox(ctx, 340, 172, 40, 16, '$12', 'money');
+  U.bar(ctx, 386, 175, 110, 9, 0.72, 'power');
+  U.bar(ctx, 502, 175, 60, 9, 0.45, 'q');
+  U.bar(ctx, 568, 175, 60, 9, 0.85, 'c');
+
+  // ---------------- ICONOS
+  U.panel(ctx, 330, 200, 306, 50, 'inset');
+  const names = U.iconNames();
+  names.forEach((n, i) => U.icon(ctx, n, 336 + (i % 20) * 15, 206 + Math.floor(i / 20) * 16));
+  // cursores
+  U.cursor(ctx, 336, 228, 'normal');
+  U.cursor(ctx, 362, 234, 'aim');
+  U.cursor(ctx, 382, 228, 'grab');
+  F.draw(ctx, 'iconos 12x12 · cursores', 400, 233, { color: '6' });
+
+  // ---------------- PARTÍCULAS Y POPTEXTS (congelados)
+  U.panel(ctx, 330, 254, 306, 102, 'blood');
+  U.panel(ctx, 4, 296, 320, 60, 'gold');
+  F.draw(ctx, 'RECOMPENSA', 164, 302, { align: 'center', size: 2, color: 'h', outline: '0', shadow: '0' });
+  F.draw(ctx, '{h}$4{/} mesa + {h}$2{/} interés', 164, 322, { align: 'center', color: '7', shadow: '0' });
+  F.draw(ctx, 'tooltip, blood, gold...', 164, 336, { align: 'center', color: '5' });
+}
+
+function seedFx() {
+  X.clear();
+  const P = [['spark', 352], ['dust', 382], ['blood', 412], ['gold', 442], ['smoke', 472], ['ember', 502], ['shard', 532], ['pocket', 562]];
+  P.forEach(([k, x]) => X.burst(x, 300, k, k === 'pocket' ? 26 : 18, k === 'gold' ? { floor: 318 } : {}));
+  X.burst(604, 296, 'explosion', 1);
+  X.popText(380, 340, '+40', 'q');
+  X.popText(440, 340, 'x2', 'c');
+  X.popText(500, 340, '+$3', 'h');
+  X.popText(574, 340, '¡DOBLE!', 'm');
+}
+
+const lbls = ['spark', 'dust', 'blood', 'gold', 'smoke', 'ember', 'shard', 'pocket', 'explos.'];
+function labels() { lbls.forEach((l, i) => F.draw(ctx, l, 352 + i * 30, 262, { align: 'center', color: '6' })); }
+
+seedFx();
+if (anim) {
+  let last = performance.now(), t = 0, acc = 0;
+  (function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt; acc += dt;
+    if (acc > 2.2) { acc = 0; seedFx(); }
+    X.update(dt);
+    sheet(t); labels(); X.draw(ctx);
+    requestAnimationFrame(loop);
+  })(last);
+} else {
+  for (let i = 0; i < 9; i++) X.update(1 / 60);
+  sheet(T0); labels(); X.draw(ctx);
+}
+</script>
+</body>
+</html>

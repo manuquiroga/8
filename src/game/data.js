@@ -79,7 +79,7 @@ OM.JOKERS = [
   { id: 'avalancha', name: 'Avalancha', rarity: 'epico', desc: 'Cada bola embocada multiplica x1.5 Mult.',
     onBall(S) { S.add({ xmult: 1.5 }, this); } },
   { id: 'eco', name: 'Eco del Abismo', rarity: 'epico', desc: 'La primera bola de cada tiro puntúa DOS veces.', mods: { retriggerFirst: true } },
-  { id: 'calavera_dorada', name: 'Calavera Dorada', rarity: 'epico', desc: 'x2.5 Mult. Pierdes $1 por cada tiro.',
+  { id: 'calavera_dorada', name: 'Calavera Dorada', rarity: 'epico', desc: 'x2.5 Mult. Pierdes $1 en cada tiro que emboque.',
     onShot(S) { if (S.balls.length) S.add({ xmult: 2.5 }, this); S.add({ money: -1 }, this); } },
   { id: 'espejo_roto', name: 'Espejo Roto', rarity: 'epico', desc: 'Copia la habilidad del comodín a su DERECHA.', copy: true },
   { id: 'parca', name: 'La Parca', rarity: 'epico', desc: 'x3 Mult si quedan 5 bolas o menos en la mesa.',
@@ -161,12 +161,12 @@ OM.BOSSES = [
 
 // Círculos (actos). 3 mesas cada uno: Menor, Mayor, Jefe.
 OM.CIRCLES = [
-  { id: 'limbo',    name: 'I · Limbo',     base: 300,   theme: 'limbo' },
-  { id: 'lujuria',  name: 'II · Lujuria',  base: 800,   theme: 'lujuria' },
-  { id: 'gula',     name: 'III · Gula',    base: 2000,  theme: 'gula' },
-  { id: 'avaricia', name: 'IV · Avaricia', base: 5000,  theme: 'avaricia' },
-  { id: 'ira',      name: 'V · Ira',       base: 11000, theme: 'ira' },
-  { id: 'abismo',   name: 'VI · Abismo',   base: 25000, theme: 'abismo' },
+  { id: 'limbo',    name: 'I · Limbo',     base: 250,   theme: 'limbo' },
+  { id: 'lujuria',  name: 'II · Lujuria',  base: 700,   theme: 'lujuria' },
+  { id: 'gula',     name: 'III · Gula',    base: 1800,  theme: 'gula' },
+  { id: 'avaricia', name: 'IV · Avaricia', base: 4500,  theme: 'avaricia' },
+  { id: 'ira',      name: 'V · Ira',       base: 10000, theme: 'ira' },
+  { id: 'abismo',   name: 'VI · Abismo',   base: 22000, theme: 'abismo' },
 ];
 OM.TABLE_KINDS = [
   { id: 'menor', name: 'Mesa Menor', mul: 1, reward: 3 },

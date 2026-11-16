@@ -1,0 +1,119 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Preview mesa — OCHO MALDITO</title>
+<style>
+  html,body{margin:0;background:#07050d;overflow:hidden}
+  canvas{display:block;width:640px;height:360px;image-rendering:pixelated}
+</style></head>
+<body>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/game/data.js"></script>
+<script src="../src/art/table_art.js"></script>
+<script>
+// Uso: preview_table.html?theme=limbo|lujuria|gula|avaricia|ira|abismo [&debug=1] [&sealed=1] [&fog=1] [&ps=0.5] [&cue=hueso]
+//      preview_table.html?balls=1   (bolas x3, fases de rodadura, grabados y tacos)
+(function () {
+  const Q = new URLSearchParams(location.search);
+  (OM.ART_INIT || []).forEach((f) => f());
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const theme = Q.get('theme') || 'limbo';
+  const T0 = +(Q.get('t') || 0);
+  const KINDS = ['normal', 'oro', 'cristal', 'plomo', 'fuego', 'holo', 'bomba'];
+  const P = OM.PAL;
+
+  // rack en el punto de pie (paño x=300,y=100)
+  const F = OM.LAYOUT.felt, R = OM.LAYOUT.ballR;
+  const apex = { x: F.x + 300, y: F.y + 100 };
+  const order = [1, 9, 2, 10, 8, 3, 11, 7, 14, 4, 5, 13, 15, 6, 12];
+  const kindsDemo = { 9: 'oro', 3: 'cristal', 14: 'fuego', 6: 'holo', 12: 'bomba', 5: 'plomo' };
+  const rack = [];
+  let k = 0;
+  for (let row = 0; row < 5; row++) for (let j = 0; j <= row; j++) {
+    const n = order[k++];
+    rack.push({ num: n, kind: kindsDemo[n] || 'normal', x: apex.x + row * 10.9, y: apex.y + (j - row / 2) * 12.6, rollX: n * 7, rollY: n * 3 });
+  }
+  const cueBall = { num: 0, kind: 'normal', x: F.x + 100, y: F.y + 118, rollX: 4, rollY: 2 };
+
+  function scene(t) {
+    OM.TABLE.drawBackdrop(ctx, theme, t);
+    OM.TABLE.drawTable(ctx, theme, t, { sealedSides: Q.get('sealed') === '1', pocketScale: +(Q.get('ps') || 1) });
+    const ang = Math.atan2(apex.y - cueBall.y, apex.x - 7 - cueBall.x);
+    // guía
+    const dist = Math.hypot(apex.x - 12 - cueBall.x, apex.y - cueBall.y);
+    const ghost = { x: cueBall.x + Math.cos(ang) * (dist - 1), y: cueBall.y + Math.sin(ang) * (dist - 1) };
+    const all = [...rack, cueBall];
+    all.forEach((b) => OM.TABLE.drawBallShadow(ctx, b.x, b.y));
+    OM.TABLE.drawAim(ctx, [{ x: cueBall.x + Math.cos(ang) * 8, y: cueBall.y + Math.sin(ang) * 8 }, ghost], ghost, t,
+      { objPath: [{ x: ghost.x + 6, y: ghost.y }, { x: ghost.x + 60, y: ghost.y - 20 }], cuePath: [{ x: ghost.x, y: ghost.y }, { x: ghost.x - 18, y: ghost.y + 50 }] });
+    all.forEach((b) => OM.TABLE.drawBall(ctx, b, b.x, b.y, t));
+    // una bola rodando sola cerca de una tronera + resplandor
+    const rb = { num: 4, kind: 'normal', rollX: t * 40, rollY: t * 15 };
+    OM.TABLE.drawBallShadow(ctx, 590, 108); OM.TABLE.drawBall(ctx, rb, 590, 108, t);
+    OM.TABLE.drawPocketGlow(ctx, OM.TABLE.pockets()[5], t, 'h');
+    OM.TABLE.drawCue(ctx, Q.get('cue') || 'peregrino', cueBall.x - Math.cos(ang) * 7, cueBall.y - Math.sin(ang) * 7, ang, 6 + Math.sin(t * 3) * 4, t);
+    if (Q.get('fog') === '1') OM.TABLE.drawFog(ctx, cueBall.x, cueBall.y, 60, t);
+    if (Q.get('debug') === '1') {
+      for (const p of OM.TABLE.pockets()) {
+        ctx.fillStyle = P.n; ctx.fillRect(p.x, p.y, 1, 1);
+        ctx.globalAlpha = 0.5; ctx.fillStyle = P.u;
+        for (let a = 0; a < 64; a++) ctx.fillRect(Math.round(p.x + Math.cos(a / 64 * 6.283) * p.r), Math.round(p.y + Math.sin(a / 64 * 6.283) * p.r), 1, 1);
+        ctx.globalAlpha = 1;
+      }
+      ctx.strokeStyle = P.r; ctx.globalAlpha = 0.4; ctx.strokeRect(F.x + 0.5, F.y + 0.5, F.w - 1, F.h - 1); ctx.globalAlpha = 1;
+    }
+    // demo de rack preview (abajo)
+    if (Q.get('rackdemo') === '1') { ctx.fillStyle = P['1']; ctx.fillRect(20, 20, 90, 80); OM.TABLE.drawRackPreview(ctx, order.map((n) => ({ num: n, kind: kindsDemo[n] || 'normal' })), 30, 26, t); }
+  }
+
+  // ---------- hoja de bolas ----------
+  const off = OM.PX.canvas(214, 120);
+  function sheet(t) {
+    ctx.fillStyle = P['1']; ctx.fillRect(0, 0, 640, 360);
+    const o = off.ctx;
+    o.fillStyle = P.k; o.fillRect(0, 0, 214, 120);
+    for (let y = 0; y < 120; y++) for (let x = 0; x < 214; x++) if ((x * 7 + y * 13) % 29 === 0) { o.fillStyle = P.j; o.fillRect(x, y, 1, 1); }
+    // filas 0..15 en 2 filas, 3 fases de rodadura cada una
+    for (let n = 0; n <= 15; n++) {
+      const col = n % 8, row = Math.floor(n / 8);
+      for (let ph = 0; ph < 3; ph++) {
+        const x = 8 + col * 26 + (ph % 2) * 13, y = 8 + row * 30 + (ph === 2 ? 13 : 0) + (ph === 1 ? 0 : 0);
+        const b = { num: n, kind: 'normal', rollX: [0, 9, t * 12][ph], rollY: [0, 4, t * 5][ph] };
+        if (ph === 2) { OM.TABLE.drawBallShadow(o, x + 6, y); OM.TABLE.drawBall(o, b, x + 6, y, t); }
+        else { OM.TABLE.drawBallShadow(o, x, y); OM.TABLE.drawBall(o, b, x, y, t); }
+      }
+    }
+    // grabados: fila con 7 kinds sobre lisa 3 y rayada 11
+    KINDS.forEach((kd, i) => {
+      const x = 12 + i * 28, y = 76;
+      OM.TABLE.drawBallShadow(o, x, y); OM.TABLE.drawBall(o, { num: 3, kind: kd, rollX: 0, rollY: 0 }, x, y, t);
+      OM.TABLE.drawBallShadow(o, x + 13, y + 4); OM.TABLE.drawBall(o, { num: 11, kind: kd, rollX: t * 9, rollY: 3 }, x + 13, y + 4, t);
+    });
+    // 8 maldita rodando
+    OM.TABLE.drawBall(o, { num: 8, kind: 'normal', rollX: t * 8, rollY: t * 3 }, 204, 100, t);
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off.c, 0, 0, 214, 120, 0, 0, 642, 360);
+    ctx.restore();
+  }
+  function cuesView(t) {
+    // tacos a escala 1 abajo a la derecha sobre la hoja (opcional ?cues=1)
+    ctx.fillStyle = P['2']; ctx.fillRect(0, 0, 640, 360);
+    OM.TABLE.drawBackdrop(ctx, theme, t);
+    (OM.CUES).forEach((c, i) => OM.TABLE.drawCue(ctx, c.id, 420, 80 + i * 26, 0, 0, t));
+    (OM.CUES).forEach((c, i) => OM.TABLE.drawCue(ctx, c.id, 300 + i * 60, 330, -1.1 + i * 0.25, 0, t));
+    OM.TABLE.drawRackPreview(ctx, order.map((n) => ({ num: n, kind: kindsDemo[n] || 'normal' })), 460, 190, t);
+    OM.TABLE.drawRackPreview(ctx, [1, 2, 3, 4, 5].map((n) => ({ num: n, kind: KINDS[n] })), 460, 270, t);
+  }
+
+  const start = performance.now();
+  function frame() {
+    const t = T0 + (performance.now() - start) / 1000;
+    if (Q.get('balls') === '1') sheet(t);
+    else if (Q.get('cues') === '1') cuesView(t);
+    else scene(t);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+</script>
+</body></html>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCHO MALDITO — preview audio</title>
+<style>
+  body { background:#0d0812; color:#d8c9b0; font:14px/1.4 monospace; margin:0; padding:16px; }
+  h1 { color:#e04a3a; font-size:20px; margin:0 0 4px; letter-spacing:2px; }
+  h2 { color:#c9a34a; font-size:14px; margin:18px 0 6px; text-transform:uppercase; }
+  p.hint { color:#7d6f8a; margin:0 0 10px; }
+  .grid { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#2a1830; color:#e8dcc4; border:1px solid #5b3a66; padding:6px 10px; font:inherit; cursor:pointer; border-radius:3px; }
+  button:hover { background:#432552; }
+  button.on { background:#7a1d2a; border-color:#e04a3a; }
+  button.combo { border-color:#3a6fa8; }
+  label { display:inline-flex; align-items:center; gap:6px; margin-right:16px; }
+  input[type=range] { width:160px; }
+  #meter { height:10px; background:#1b1022; border:1px solid #3a2444; width:320px; margin-top:8px; position:relative; }
+  #meter div { height:100%; width:0; background:linear-gradient(90deg,#3a6fa8,#c9a34a,#e04a3a); }
+  #peak { color:#7d6f8a; }
+</style>
+</head>
+<body>
+<h1>OCHO MALDITO · AUDIO</h1>
+<p class="hint">Todo procedural (WebAudio). Pulsa cualquier botón para desbloquear el audio.</p>
+
+<h2>Música</h2>
+<div class="grid" id="music"></div>
+<div style="margin-top:8px">
+  <label>intensity <input id="int" type="range" min="0" max="1" step="0.01" value="0"><span id="intv">0.00</span></label>
+</div>
+
+<h2>Volumen</h2>
+<div>
+  <label>master <input id="vm" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+  <label>música <input id="vmu" type="range" min="0" max="1" step="0.01" value="0.6"></label>
+  <label>sfx <input id="vs" type="range" min="0" max="1" step="0.01" value="0.9"></label>
+  <button id="mute">mute</button>
+</div>
+<div id="meter"><div></div></div><span id="peak"></span>
+
+<h2>SFX</h2>
+<div class="grid" id="sfx"></div>
+<div style="margin-top:8px">
+  <label>vol <input id="svol" type="range" min="0" max="1" step="0.01" value="0.8"></label>
+  <label>pitch <input id="spitch" type="range" min="0.5" max="2" step="0.01" value="1"><span id="spv">1.00</span></label>
+  <label>pan <input id="span" type="range" min="-1" max="1" step="0.01" value="0"></label>
+</div>
+
+<h2>Combos (situaciones de juego)</h2>
+<div class="grid" id="combos"></div>
+
+<script src="../src/audio/audio.js"></script>
+<script>
+(function () {
+  var A = OM.AUDIO;
+  var $ = function (id) { return document.getElementById(id); };
+  function unlock() { A.unlock(); setupMeter(); }
+  function btn(parent, label, fn, cls) {
+    var b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls;
+    b.onclick = function () { unlock(); fn(b); }; parent.appendChild(b); return b;
+  }
+  // música
+  var mb = {};
+  A.TRACKS.concat([null]).forEach(function (t) {
+    mb[t] = btn($('music'), t === null ? '■ stop' : '♪ ' + t, function () {
+      A.music(t);
+      for (var k in mb) mb[k].classList.toggle('on', k === String(t) && t !== null);
+    });
+  });
+  $('int').oninput = function () { A.intensity(+this.value); $('intv').textContent = (+this.value).toFixed(2); };
+  function vols() { A.setVolume(+$('vm').value, +$('vmu').value, +$('vs').value); }
+  ['vm', 'vmu', 'vs'].forEach(function (id) { $(id).oninput = vols; });
+  $('mute').onclick = function () { unlock(); A.toggleMute(); this.classList.toggle('on', A.muted); };
+  $('spitch').oninput = function () { $('spv').textContent = (+this.value).toFixed(2); };
+  function opts() { return { vol: +$('svol').value, pitch: +$('spitch').value === 1 ? undefined : +$('spitch').value, pan: +$('span').value }; }
+  A.SFX.forEach(function (n) { btn($('sfx'), n, function () { A.sfx(n, opts()); }); });
+
+  // combos
+  function later(ms, f) { setTimeout(f, ms); }
+  btn($('combos'), 'saque (40 clacks)', function () {
+    A.sfx('cue_hit', { vol: 1 });
+    for (var i = 0; i < 40; i++) (function (i) {
+      later(20 + Math.pow(i / 40, 1.7) * 1400 + Math.random() * 30, function () {
+        A.sfx(Math.random() < 0.2 ? 'cushion' : 'clack', { vol: Math.max(0.1, 1 - i / 40) * Math.random(), pan: Math.random() * 1.6 - 0.8 });
+      });
+    })(i);
+    later(900, function () { A.sfx('pocket', { pan: -0.7 }); });
+  }, 'combo');
+  btn($('combos'), 'puntuación (fichas → mult → xmult → total)', function () {
+    for (var i = 0; i < 8; i++) (function (i) { later(i * 140, function () { A.sfx('chips'); }); })(i);
+    for (var j = 0; j < 3; j++) (function (j) { later(1300 + j * 260, function () { A.sfx('mult'); }); })(j);
+    later(2300, function () { A.sfx('xmult'); });
+    later(3400, function () { A.sfx('score_total'); });
+  }, 'combo');
+  btn($('combos'), 'fichas con pitch explícito', function () {
+    for (var i = 0; i < 10; i++) (function (i) { later(i * 120, function () { A.sfx('chips', { pitch: 1 + i * 0.12 }); }); })(i);
+  }, 'combo');
+  btn($('combos'), 'tienda', function () {
+    A.sfx('card_hover'); later(200, function () { A.sfx('card_hover'); });
+    later(450, function () { A.sfx('buy'); }); later(1200, function () { A.sfx('card_flip'); });
+    later(1600, function () { A.sfx('reroll'); }); later(2400, function () { A.sfx('pack_open'); });
+  }, 'combo');
+
+  // medidor
+  var an = null, data = null, pk = 0;
+  function setupMeter() {
+    if (an || !A.ctx || !A._nodes || !A._nodes.lim) return;
+    an = A.ctx.createAnalyser(); an.fftSize = 2048; A._nodes.lim.connect(an); data = new Float32Array(an.fftSize);
+    (function loop() {
+      an.getFloatTimeDomainData(data);
+      var s = 0, p = 0; for (var i = 0; i < data.length; i++) { s += data[i] * data[i]; p = Math.max(p, Math.abs(data[i])); }
+      var rms = Math.sqrt(s / data.length); pk = Math.max(p, pk * 0.97);
+      $('meter').firstChild.style.width = Math.min(100, rms * 250) + '%';
+      $('peak').textContent = ' rms ' + rms.toFixed(3) + ' · pico ' + pk.toFixed(2);
+      window.__meter = { rms: rms, peak: p };
+      requestAnimationFrame(loop);
+    })();
+  }
+})();
+</script>
+</body>
+</html>

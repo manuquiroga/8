@@ -6,8 +6,8 @@
 | [TKT-002](TKT-002.md) | GDD y datos de diseño | ✅ HECHO | lead |
 | [TKT-003](TKT-003.md) | Fuente, UI/HUD, FX, logo | 🔄 EN CURSO | agente-ui |
 | [TKT-004](TKT-004.md) | Arte de cartas (comodines, consumibles, jefes) | 🔄 EN CURSO | agente-cartas |
-| [TKT-005](TKT-005.md) | Mesa, bolas, tacos, fondos | 🔄 EN CURSO | agente-mesa |
-| [TKT-006](TKT-006.md) | Audio procedural | 🔄 EN CURSO | agente-audio |
+| [TKT-005](TKT-005.md) | Mesa, bolas, tacos, fondos | ✅ HECHO | agente-mesa |
+| [TKT-006](TKT-006.md) | Audio procedural | ✅ HECHO | agente-audio |
 | [TKT-007](TKT-007.md) | Física de billar | 🔄 EN CURSO | lead |
 | [TKT-008](TKT-008.md) | Run, puntuación, comodines, jefes | 🔄 EN CURSO | lead |
 | [TKT-009](TKT-009.md) | Escenas y flujo | 🔄 EN CURSO | lead |
