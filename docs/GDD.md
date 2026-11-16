@@ -62,9 +62,10 @@ La guía simula la blanca con los mandos actuales, así que la curva y el arco d
 - `WASD` efecto, `Q/E` (o flechas arriba/abajo) ángulo de golpe, `R` centrar, flechas izquierda/derecha y rueda: ajuste fino, `Espacio`: potencia, `M`: música.
 
 ## 8. Online
-Sala con código de 4 letras. El relé es `tools/serve.js`: los dos jugadores abren la dirección de ese servidor. Sin servidor (archivo suelto o artifact) quedan los bots y el modo de 2 jugadores local. Ver `src/game/net.js`.
+Sala con código de 4 letras, de navegador a navegador (WebRTC con PeerJS). No hace falta servidor propio: el servidor público de PeerJS solo presenta a los jugadores, y su TURN hace de puente si la conexión directa falla. El juego se publica como sitio estático en Vercel. Ver `src/game/net.js`.
 
 ## 9. Pendiente / ideas
 - Balance fino de comodines con partidas humanas (el bot no usa efecto ni elevación).
 - Reconexión online y revancha en la misma sala.
+- Buscar rival al azar o ranking: necesitaría un servicio aparte (por ejemplo Supabase); solo cambiaría `net.js`.
 - Bots que usen massé y salto.

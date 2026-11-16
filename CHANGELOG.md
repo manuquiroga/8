@@ -4,6 +4,10 @@ Cambios del juego pensados para jugadores. Los detalles técnicos y los números
 
 ## 3.0 — Pool arcade 1v1 · 2026-11-16 (sin publicar, en playtest)
 
+### Online sin servidor (3.0c)
+- El online pasa a ser de navegador a navegador (PeerJS): ya no hace falta correr `node tools/serve.js` para jugar con alguien; basta con abrir el juego publicado y compartir el código de sala.
+- Si el rival se cae, se avisa a los pocos segundos.
+
 ### Ajustes tras el primer playtest (3.0b)
 - **Nueva falta**: si tras el contacto ninguna bola toca banda y no entra nada, es falta.
 - **Reloj de tiro**: 30 segundos por tiro (colocar + apuntar). Se ve la cuenta atrás en los últimos 10. Si se acaba es falta; si estabas cargando, el taco dispara. El Reloj sigue en 15 s y dispara solo.

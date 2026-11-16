@@ -1,0 +1,8 @@
+# Vercel publica el juego tal cual (sitio estático, sin build). Esto no hace falta en producción.
+8/
+dist/
+registros/
+tickets/
+tools/
+docs/
+.claude/

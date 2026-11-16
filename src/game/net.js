@@ -1,12 +1,16 @@
-// 8 — 1v1 online por sala. Transporte mínimo sin dependencias: el servidor de tools/serve.js hace de relé
-// (POST para enviar, EventSource para recibir). Solo funciona si el juego se sirve desde ese servidor
-// (http://<tu-ip>:8088); abierto como archivo o como artifact no hay online, pero sí bots y 2 jugadores locales.
+// 8 — 1v1 online por sala, de navegador a navegador (WebRTC con PeerJS, src/vendor/peerjs.min.js).
+// No necesita servidor propio: el servidor público de PeerJS solo presenta a los dos jugadores
+// (y su TURN hace de puente si la conexión directa no es posible). El juego puede alojarse como sitio estático.
 //
+// La sala es un código de 4 letras: el anfitrión se registra como `PREFIX + código` y el invitado se conecta a ese id.
 // El juego es por turnos: el que tira manda sus mandos (`shoot`) y, al terminar el tiro, el estado completo
 // (`sync`). La física es de paso fijo, así que el otro cliente ve el mismo tiro y luego se ajusta al estado recibido.
 window.OM = window.OM || {};
 
 OM.NET = (function () {
+  const PREFIX = 'ocho-pool-v3-';
+  const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const TIMEOUT = 20; // s sin noticias del rival = desconectado
   const N = {
     on: false, role: null, code: null, peer: false, error: null,
     inbox: [],          // mensajes de partida (los consume la escena de mesa, en orden)
@@ -15,44 +19,109 @@ OM.NET = (function () {
     cfg: null,          // config que manda el anfitrión {mode}
     start: null,        // orden de empezar del anfitrión
   };
-  let es = null, chain = Promise.resolve();
+  let P = null, conn = null, lastSeen = 0, beat = null;
 
-  N.available = () => typeof location !== 'undefined' && /^https?:$/.test(location.protocol) && typeof EventSource !== 'undefined';
+  N.available = () => typeof window.Peer === 'function' && typeof window.RTCPeerConnection === 'function';
   N.me = () => (N.role === 'g' ? 1 : 0);
 
-  function reset() { N.inbox = []; N.picks = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; }
+  function reset() { N.inbox = []; N.picks = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
   function handle(m) {
-    if (!m || !m.t) return;
-    if (m.t === 'peer') { N.peer = !!m.on; if (!m.on && N.wasPeer) N.error = 'El rival se desconectó'; if (m.on) N.wasPeer = true; return; }
+    lastSeen = Date.now();
+    if (!m || !m.t || m.t === 'ping') return;
     if (m.t === 'hello') { N.lobby = m; return; }
     if (m.t === 'cfg') { N.cfg = m; return; }
     if (m.t === 'start') { N.start = m; return; }
     if (m.t === 'pick') { N.picks[m.match + ':' + m.pi] = m.id; return; }
     N.inbox.push(m);
   }
-  function open(code, role) {
-    N.close(); reset();
-    N.on = true; N.role = role; N.code = code; N.wasPeer = false;
-    es = new EventSource('/net/' + code + '/' + role + '/events');
-    es.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error('net', err); } };
-    es.onerror = () => { if (es && es.readyState === 2) N.error = N.error || 'Se perdió la conexión con la sala'; };
-  }
-  // crea sala (anfitrión). Devuelve una promesa con el código.
-  const OLD = 'El servidor no tiene salas: reinicia node tools/serve.js';
-  N.host = () => fetch('/net/create', { method: 'POST' })
-    .then((r) => { if (!r.ok) throw new Error(OLD); return r.json(); })
-    .then((d) => { if (!d || !/^[A-Z]{4}$/.test(d.code)) throw new Error(OLD); open(d.code, 'h'); return d.code; });
-  // se une a una sala existente
-  N.join = (code) => {
-    code = String(code || '').toUpperCase().trim();
-    return fetch('/net/' + code + '/check').then((r) => r.text().then((t) => { if (!r.ok || t !== 'ok') throw new Error(r.status === 404 && t === '404' ? OLD : 'No existe la sala ' + code); open(code, 'g'); return code; }));
-  };
-  // envía en orden (cada POST espera al anterior)
-  N.send = (m) => {
+  function lost(why) {
     if (!N.on) return;
-    const body = JSON.stringify(m), url = '/net/' + N.code + '/' + N.role;
-    chain = chain.then(() => fetch(url, { method: 'POST', body })).catch(() => { N.error = N.error || 'No se pudo enviar al rival'; });
+    N.peer = false;
+    if (N.wasPeer) N.error = N.error || why || 'El rival se desconectó';
+  }
+  function attach(c) {
+    conn = c;
+    c.on('open', () => { N.peer = true; N.wasPeer = true; lastSeen = Date.now(); });
+    c.on('data', handle);
+    c.on('close', () => { if (conn === c) { conn = null; lost(); } });
+    c.on('error', () => { if (conn === c) lost('Se perdió la conexión con el rival'); });
+  }
+  function start(role, code) {
+    N.on = true; N.role = role; N.code = code;
+    // latido: si el canal se cae sin avisar (pasa en algunos navegadores), lo detectamos igual
+    clearInterval(beat);
+    beat = setInterval(() => {
+      if (conn && conn.open) { try { conn.send({ t: 'ping' }); } catch (e) {} }
+      if (N.peer && Date.now() - lastSeen > TIMEOUT * 1000) lost('El rival no responde');
+    }, 2000);
+  }
+  function newPeer(id) {
+    const p = id ? new window.Peer(id, { debug: 0 }) : new window.Peer({ debug: 0 });
+    // si se cae la conexión con el servidor de presentación, la partida sigue (el canal es directo); reintentamos igual
+    p.on('disconnected', () => { if (P === p && !p.destroyed) { try { p.reconnect(); } catch (e) {} } });
+    return p;
+  }
+  const msgOf = (err) => ({
+    'browser-incompatible': 'Tu navegador no permite el online',
+    network: 'No se pudo conectar con el servidor de salas',
+    'server-error': 'El servidor de salas no responde',
+    'socket-error': 'No se pudo conectar con el servidor de salas',
+    'socket-closed': 'Se cerró la conexión con el servidor de salas',
+    'peer-unavailable': 'No existe la sala',
+  }[err && err.type] || 'Error de conexión (' + ((err && err.type) || '?') + ')');
+
+  // crea sala (anfitrión). Devuelve una promesa con el código.
+  N.host = () => new Promise((resolve, reject) => {
+    N.close(); reset();
+    let tries = 0;
+    const attempt = () => {
+      let code = ''; for (let i = 0; i < 4; i++) code += ALPHA[Math.floor(Math.random() * ALPHA.length)];
+      const p = P = newPeer(PREFIX + code);
+      let opened = false;
+      p.on('open', () => { opened = true; start('h', code); resolve(code); });
+      p.on('connection', (c) => {
+        if (conn && conn.open) { c.on('open', () => c.close()); return; } // la sala ya tiene rival
+        attach(c);
+      });
+      p.on('error', (err) => {
+        if (!opened && err.type === 'unavailable-id' && tries++ < 5) { p.destroy(); attempt(); return; } // código ocupado: otro
+        if (!opened) { p.destroy(); P = null; reject(new Error(msgOf(err))); return; }
+        if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed') return; // no corta la partida
+        lost(msgOf(err));
+      });
+    };
+    attempt();
+  });
+
+  // se une a una sala existente
+  N.join = (code) => new Promise((resolve, reject) => {
+    code = String(code || '').toUpperCase().trim();
+    N.close(); reset();
+    const p = P = newPeer(null);
+    let done = false;
+    const fail = (msg) => { if (done) return; done = true; p.destroy(); P = null; N.on = false; reject(new Error(msg)); };
+    p.on('open', () => {
+      const c = p.connect(PREFIX + code, { reliable: true, serialization: 'json' });
+      attach(c);
+      c.on('open', () => { if (done) return; done = true; start('g', code); resolve(code); });
+      setTimeout(() => fail('No se pudo conectar con la sala ' + code), 15000);
+    });
+    p.on('error', (err) => {
+      if (!done) fail(err.type === 'peer-unavailable' ? 'No existe la sala ' + code : msgOf(err));
+      else if (err.type !== 'network' && err.type !== 'server-error' && err.type !== 'socket-error' && err.type !== 'socket-closed') lost(msgOf(err));
+    });
+  });
+
+  // envía al rival (el canal es fiable y ordenado). Sin rival conectado, el mensaje se pierde.
+  N.send = (m) => {
+    if (!N.on || !conn || !conn.open) return;
+    try { conn.send(m); } catch (e) { N.error = N.error || 'No se pudo enviar al rival'; }
   };
-  N.close = () => { if (es) { try { es.close(); } catch (e) {} es = null; } N.on = false; N.role = null; N.code = null; N.peer = false; };
+  N.close = () => {
+    clearInterval(beat); beat = null;
+    if (conn) { try { conn.close(); } catch (e) {} conn = null; }
+    if (P) { try { P.destroy(); } catch (e) {} P = null; }
+    N.on = false; N.role = null; N.code = null; N.peer = false;
+  };
   return N;
 })();

@@ -184,8 +184,8 @@ OM.SCENES = OM.SCENES || {};
       OM.FONT.draw(ctx, '1 CONTRA 1 ONLINE', CX, 14, { color: '8', size: 2, align: 'center', shadow: '0' });
       const back = () => { N.close(); OM.go('title'); };
       if (!N.available()) {
-        OM.UI.panel(ctx, CX - 210, 80, 420, 120, 'dark');
-        ['El online usa el servidor del propio juego como sala.', ' ', 'En el ordenador que tiene el juego:   {h}node tools/serve.js{/}', 'Los dos jugadores abren la dirección que muestra ese comando', '(por ejemplo {h}http://192.168.1.20:8088{/}) y uno crea la sala.', ' ', 'Mientras tanto: 2 JUGADORES en este dispositivo, o contra un bot.']
+        OM.UI.panel(ctx, CX - 210, 80, 420, 90, 'dark');
+        ['Tu navegador no permite el online (hace falta WebRTC).', ' ', 'Prueba con Chrome, Firefox, Edge o Safari actualizados.', ' ', 'Mientras tanto: 2 JUGADORES en este dispositivo, o contra un bot.']
           .forEach((ln, i) => OM.FONT.draw(ctx, ln, CX, 92 + i * 14, { color: '7', align: 'center' }));
         if (G.button(CX - 50, 220, 100, 20, 'VOLVER', 'dark', false, 'Escape')) back();
         return;
@@ -216,7 +216,7 @@ OM.SCENES = OM.SCENES || {};
       if (N.error) this.err = N.error;
       OM.FONT.draw(ctx, 'SALA', CX - 40, 44, { color: '6', align: 'right' });
       OM.FONT.draw(ctx, N.code, CX, 36, { color: 'i', size: 2, align: 'center', shadow: '0', wave: 1, t });
-      OM.FONT.draw(ctx, N.peer ? 'rival conectado' : 'esperando al rival: pásale esta dirección y el código', CX, 60, { color: N.peer ? 'm' : '6', align: 'center' });
+      OM.FONT.draw(ctx, N.peer ? 'rival conectado' : 'esperando al rival: pásale este código', CX, 60, { color: N.peer ? 'm' : '6', align: 'center' });
       // mi lado
       const colMe = PCOL[N.me()], colRv = PCOL[1 - N.me()];
       const draw = (x, title, col, name, cueId, ready, mine) => {

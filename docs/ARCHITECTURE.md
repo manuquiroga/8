@@ -12,7 +12,8 @@ src/game/physics.js     OM.Physics — paso fijo (determinista), bandas, tronera
 src/game/match.js       OM.Match — serie de 5, draft, juez de bola 8 y bola 9, puntuación Puntos x Combo, comodines.
                         Sin dibujo ni entrada. El estado de la serie (OM.S) es JSON plano.
 src/game/ai.js          OM.AI — bots: bola fantasma + comprobación por simulación según nivel
-src/game/net.js         OM.NET — 1v1 online por sala (relé en tools/serve.js)
+src/game/net.js         OM.NET — 1v1 online por sala, de navegador a navegador (PeerJS)
+src/vendor/peerjs.min.js PeerJS 1.5.4 (MIT), copia local para que el build sea un solo archivo
 src/game/main.js        Bucle, entrada (ratón/táctil/teclado), GUI inmediata OM.G, persistencia META
 src/game/hud.js         OM.HUD — marcador de los dos jugadores, comodines del que tira y del rival
 src/game/scene_table.js Escena de mesa: turnos (humano/bot/remoto), mandos, simulación, puntuación animada
@@ -26,7 +27,7 @@ src/game/scene_menus.js Título, preparación, sala online, draft, resultado, co
 4. `beginTurn` aplica los modificadores del siguiente jugador (troneras, imán, guía) y reinicia efecto y elevación.
 
 ## Online
-El que tira es la autoridad. Envía sus mandos (`shoot`) y, al terminar, el estado completo (`sync`: serie + posiciones). El otro cliente simula el mismo tiro (paso fijo) y luego se ajusta al estado recibido. Los comodines del draft salen de la semilla, así que solo viaja la elección (`pick`).
+PeerJS: el anfitrión se registra en el servidor público de PeerJS con el id `ocho-pool-v3-<CÓDIGO>` y el invitado se conecta a ese id. Canal de datos fiable y ordenado, con latido para detectar desconexiones. El que tira es la autoridad. Envía sus mandos (`shoot`) y, al terminar, el estado completo (`sync`: serie + posiciones). El otro cliente simula el mismo tiro (paso fijo) y luego se ajusta al estado recibido. Los comodines del draft salen de la semilla, así que solo viaja la elección (`pick`).
 
 ## Comodines
 Objetos de datos con hooks (`onBall`, `onShot`, `onMiss`, `onFoul`, `onRival*`, `mods`, `rival`, `active`). Ver la cabecera de `data.js`. *Espejo Roto* copia al comodín de su izquierda.
@@ -34,4 +35,7 @@ Objetos de datos con hooks (`onBall`, `onShot`, `onMiss`, `onFoul`, `onRival*`, 
 ## Pruebas
 - `node tools/simtest.js [series] [nivelA] [nivelB] [modo]` — series bot contra bot headless: balance y humo.
 - `node tools/playtest.js <dir> [partidas]` — juega contra el bot en Chromium y guarda capturas + errores (necesita playwright).
-- `node tools/serve.js [puerto]` — servidor del juego + relé del online (por defecto 8088).
+- `node tools/serve.js [puerto]` — servidor estático local (por defecto 8088).
+
+## Deploy
+Vercel, como sitio estático sin build (`vercel.json`, `.vercelignore`). Cada push a `main` publica.
