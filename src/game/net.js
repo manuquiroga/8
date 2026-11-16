@@ -101,20 +101,22 @@ OM.NET = (function () {
   });
 
   // se une a una sala existente
+  // Si la sala no aparece se reintenta un par de veces (el anfitrión puede estar recién conectándose).
   N.join = (code) => new Promise((resolve, reject) => {
     code = String(code || '').toUpperCase().trim();
     N.close(); reset();
     const p = P = newPeer(null);
-    let done = false;
-    const fail = (msg) => { if (done) return; done = true; p.destroy(); P = null; N.on = false; reject(new Error(msg)); };
-    p.on('open', () => {
+    let done = false, tries = 0, timer = null;
+    const fail = (msg) => { if (done) return; done = true; clearTimeout(timer); p.destroy(); P = null; N.on = false; reject(new Error(msg)); };
+    const dial = () => {
       const c = p.connect(PREFIX + code, { reliable: true, serialization: 'json' });
       attach(c);
-      c.on('open', () => { if (done) return; done = true; start('g', code); resolve(code); });
-      setTimeout(() => fail('No se pudo conectar con la sala ' + code), 15000);
-    });
+      c.on('open', () => { if (done) return; done = true; clearTimeout(timer); start('g', code); resolve(code); });
+    };
+    p.on('open', () => { dial(); timer = setTimeout(() => fail('No se pudo conectar con la sala ' + code), 20000); });
     p.on('error', (err) => {
-      if (!done) fail(err.type === 'peer-unavailable' ? 'No existe la sala ' + code : msgOf(err));
+      if (!done && err.type === 'peer-unavailable' && tries++ < 2) { setTimeout(() => { if (!done) dial(); }, 1500); return; }
+      if (!done) fail(err.type === 'peer-unavailable' ? 'La sala ' + code + ' no está abierta: el anfitrión tiene que seguir en la sala' : msgOf(err));
       else if (err.type !== 'network' && err.type !== 'server-error' && err.type !== 'socket-error' && err.type !== 'socket-closed') lost(msgOf(err));
     });
   });
