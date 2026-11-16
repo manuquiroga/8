@@ -198,7 +198,7 @@ OM.FX = (function () {
         case 'gold': {
           const ph = Math.floor(Math.abs(p.rot) * 2) % 4;
           const w = [4, 3, 1, 3][ph];
-          ctx.fillStyle = PAL['0']; ctx.fillRect(x - (w >> 1) - 1, y - 1, w + 2, 6);
+          ctx.fillStyle = PAL['0']; ctx.fillRect(x - (w >> 1) - 1, y, w + 2, 4); ctx.fillRect(x - (w >> 1), y - 1, w, 6);
           ctx.fillStyle = PAL[ph === 2 ? 'g' : 'h']; ctx.fillRect(x - (w >> 1), y, w, 4);
           if (w > 1) { ctx.fillStyle = PAL['i']; ctx.fillRect(x - (w >> 1), y, 1, 2); }
           if (w === 4) { ctx.fillStyle = PAL['g']; ctx.fillRect(x + 1, y + 1, 1, 2); }
@@ -443,7 +443,7 @@ OM.FX = (function () {
     bg.addColorStop(0, 'rgba(255,244,224,0)'); bg.addColorStop(0.5, 'rgba(255,244,224,0.035)'); bg.addColorStop(1, 'rgba(255,244,224,0)');
     bx.fillStyle = bg; bx.fillRect(0, 0, 4, 64);
   }
-  const POST_DEF = { crt: true, scan: 0.26, vignette: 0.55, aberration: 1, bloom: 0.45, flicker: 0.012, pixelPerfect: false, corners: true, band: true };
+  const POST_DEF = { crt: true, scan: 0.26, vignette: 0.55, aberration: 1, bloom: 0.32, flicker: 0.012, pixelPerfect: false, corners: true, band: true };
   function post(src, dst, dw, dh, t, opts) {
     const o = Object.assign({}, POST_DEF, opts || {});
     const sw = src.width, sh = src.height;

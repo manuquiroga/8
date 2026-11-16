@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>OCHO MALDITO — post-proceso CRT</title>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/art/font.js"></script>
+<script src="../src/art/ui_art.js"></script>
+<script src="../src/art/fx.js"></script>
+<script>
+// Escena de título renderizada en el canvas interno (640x360) y pasada por OM.FX.post al canvas de pantalla.
+//   ?scene=title|shop|map|gameover|victory   ?crt=0 (desactivado)   ?split=1 (mitad izq. sin CRT)   ?anim=1   ?bench=1 (mide ms/frame)
+// Captura recomendada: node tools/shot.js "tools/preview_ui_crt.html" out.png 1 900 1280 720
+(OM.ART_INIT || []).forEach((f) => f());
+const q = new URLSearchParams(location.search);
+const scene = q.get('scene') || 'title';
+const crt = q.get('crt') !== '0';
+const split = q.get('split') === '1';
+const anim = q.get('anim') === '1' || q.get('bench') === '1';
+const bench = q.get('bench') === '1';
+const src = document.createElement('canvas'); src.width = OM.W; src.height = OM.H;
+const sctx = src.getContext('2d'); sctx.imageSmoothingEnabled = false;
+const scr = document.getElementById('screen');
+const dctx = scr.getContext('2d');
+function fit() { scr.width = innerWidth; scr.height = innerHeight; }
+fit(); addEventListener('resize', fit);
+const F = OM.FONT, U = OM.UI, X = OM.FX;
+
+function frame(t) {
+  U.drawBackground(sctx, t, scene);
+  if (scene === 'title') {
+    U.logo(sctx, 320, 26, t);
+    ['NUEVA PARTIDA', 'COLECCIÓN', 'AJUSTES'].forEach((l, i) => U.button(sctx, 250, 186 + i * 30, 140, 24, l, i === 0 ? 'hover' : 'idle', i === 0 ? 'red' : 'dark'));
+  } else {
+    U.panel(sctx, 200, 120, 240, 90, scene === 'gameover' ? 'blood' : 'gold');
+    F.draw(sctx, scene.toUpperCase(), 320, 134, { align: 'center', size: 2, color: 'h', outline: '0', shadow: '0' });
+    U.valueBox(sctx, 220, 162, 90, 24, 340, 'chips');
+    U.valueBox(sctx, 330, 162, 90, 24, 'x12', 'mult');
+  }
+  X.draw(sctx);
+  U.cursor(sctx, 402, 196, 'normal');
+  X.post(src, dctx, scr.width, scr.height, t, { crt });
+  if (split) { // mitad izquierda sin CRT para comparar
+    dctx.save(); dctx.beginPath(); dctx.rect(0, 0, scr.width / 2, scr.height); dctx.clip();
+    X.post(src, dctx, scr.width, scr.height, t, { crt: false });
+    dctx.restore();
+  }
+}
+X.burst(470, 300, 'ember', 30);
+X.burst(160, 300, 'spark', 20);
+X.popText(330, 150, '+120', 'q');
+X.popText(380, 160, 'x3', 'c');
+for (let i = 0; i < 12; i++) X.update(1 / 60);
+
+if (anim) {
+  const t0 = performance.now();
+  let last = t0, n = 0, acc = 0;
+  (function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    X.update(dt);
+    const a = performance.now();
+    frame((now - t0) / 1000);
+    acc += performance.now() - a; n++;
+    if (bench && n % 60 === 0) { document.title = 'ms/frame ' + (acc / n).toFixed(2); console.log('ms/frame', (acc / n).toFixed(2)); }
+    requestAnimationFrame(loop);
+  })(t0);
+} else frame(1.7);
+</script>
+</body>
+</html>

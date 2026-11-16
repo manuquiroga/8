@@ -15,7 +15,7 @@ const path = require('path');
   await page.waitForTimeout(1500); await shot('01_title');
   await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('02_cues');
   await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('03_map');
-  await page.keyboard.press('Enter'); await page.waitForTimeout(1200); await shot('04_table_intro');
+  await page.keyboard.press('Enter'); await page.waitForTimeout(1200); await shot('04_table_intro'); await page.evaluate(() => { OM.dbg().T.target = 40; });
   await page.waitForTimeout(1200);
   // colocar blanca
   await click(250, 190); await page.waitForTimeout(300);

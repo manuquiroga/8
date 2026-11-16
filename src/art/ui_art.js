@@ -31,6 +31,12 @@ OM.UI = (function () {
   const bayer = (x, y) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
   const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  function vnoise(x, y) { // ruido de valor suave
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
   function pick(ramp, v, x, y) { // cuantiza v∈[0,1] en una rampa con tramado Bayer
     v = clamp(v, 0, 0.9999);
     const f = v * (ramp.length - 1);
@@ -254,17 +260,17 @@ OM.UI = (function () {
       '.fghhhhgf.',
       '..ffffff..',
     ],
-    shot: [ // bola blanca disparada con estela
-      '.....7777.',
-      '....788877',
-      '5..7887777',
-      '..67877776',
-      '5.67777776',
-      '..67777766',
-      '5..7777666',
-      '....76666.',
+    shot: [
+      '.....777..',
+      '....78887.',
+      '....78877.',
+      '....77776.',
       '.....666..',
-      '..........',
+      '...rr.....',
+      '..hg......',
+      '.hf.......',
+      'gf........',
+      'f.........',
     ],
     skull: [
       '..777777..',
@@ -338,28 +344,28 @@ OM.UI = (function () {
       '.hhhh0hhg.',
       '.ggggggff.',
     ],
-    ball: [ // bola 8
-      '..111111..',
-      '.12233221.',
-      '1223333221',
-      '1237777321',
-      '1237007321',
-      '1227777221',
-      '1227007221',
-      '1122772211',
+    ball: [
+      '...1111...',
+      '.11344311.',
+      '.13477431.',
+      '1347887321',
+      '1347007321',
+      '1337887221',
+      '1223773221',
+      '.12222221.',
       '.11222211.',
-      '..111111..',
+      '...1111...',
     ],
     cue: [
-      '........r8',
-      '.......777',
-      '......gf7.',
-      '.....gf...',
-      '....fe....',
-      '...fe.....',
+      '........rr',
+      '.......77.',
+      '......hg..',
+      '.....hg...',
+      '....hg....',
+      '...0e.....',
       '..fe......',
-      '.ee.......',
-      'ee........',
+      '.fe.......',
+      'fe........',
       'e.........',
     ],
     candle: [
@@ -367,12 +373,12 @@ OM.UI = (function () {
       '...ihi....',
       '...hvh....',
       '....v.....',
-      '...787....',
-      '..77777...',
-      '..78776...',
-      '..77776...',
-      '..77766...',
-      '.6666655..',
+      '...7887...',
+      '...7877...',
+      '...7776...',
+      '...7776...',
+      '..gggggf..',
+      '..ffffee..',
     ],
     eye: [
       '..........',
@@ -614,17 +620,17 @@ OM.UI = (function () {
   };
   // grab real: mano cerrada (puño) más legible
   CURSORS.grab.rows = [
-    '..0000000..',
-    '.077070770.',
-    '0787878770.',
-    '07777777770',
-    '07777777770',
-    '.0777777760',
-    '.0877777660',
-    '..077776600',
-    '..07776660.',
+    '..00000000.',
+    '.0787878780',
+    '.0777777770',
+    '00666666660',
+    '07777777760',
+    '07788777760',
+    '.0777777660',
+    '.0777776660',
+    '..07766660.',
     '...066660..',
-    '....0000...',
+    '...000000..',
   ];
   function cursor(ctx, x, y, state) {
     const c = CURSORS[state] || CURSORS.normal;
@@ -686,12 +692,16 @@ OM.UI = (function () {
   }
   // cadenas colgantes
   function chain(ctx, x, y0, len, sway) {
-    for (let i = 0; i < len; i += 3) {
+    const R = (a, b, w, h, c) => { ctx.fillStyle = PAL[c]; ctx.fillRect(a, b, w, h); };
+    for (let i = 0, n = 0; i < len; i += 4, n++) {
       const k = i / Math.max(1, len);
-      const xx = Math.round(x + Math.sin(k * 1.6) * sway * k);
-      ctx.fillStyle = PAL['0']; ctx.fillRect(xx - 1, y0 + i, 3, 4);
-      if ((i / 3) & 1) { ctx.fillStyle = PAL['4']; ctx.fillRect(xx - 1, y0 + i + 1, 1, 2); ctx.fillStyle = PAL['5']; ctx.fillRect(xx + 1, y0 + i + 1, 1, 2); ctx.fillStyle = PAL['1']; ctx.fillRect(xx, y0 + i + 1, 1, 2); }
-      else { ctx.fillStyle = PAL['5']; ctx.fillRect(xx, y0 + i, 1, 4); ctx.fillStyle = PAL['6']; ctx.fillRect(xx, y0 + i, 1, 1); }
+      const xx = Math.round(x + Math.sin(k * 1.6) * sway * k), y = y0 + i;
+      if (n & 1) { // eslabón de frente (anillo)
+        R(xx - 2, y - 1, 5, 7, '0');
+        R(xx - 1, y, 1, 5, '6'); R(xx + 1, y, 1, 5, '4'); R(xx, y, 1, 1, '5'); R(xx, y + 4, 1, 1, '3');
+      } else { // eslabón de canto
+        R(xx - 1, y - 1, 3, 7, '0'); R(xx, y, 1, 5, '5'); R(xx, y, 1, 1, '7');
+      }
     }
   }
   // niebla: textura tileable horizontal con tramado
@@ -803,13 +813,104 @@ OM.UI = (function () {
     const springY = ay + half * 1.0;
     if (y >= springY) return true;
     // dos arcos de radio aw centrados en los lados opuestos
-    const r = aw * 0.9;
+    const r = aw * 0.85;
     const dy = y - springY;
-    const dl = Math.hypot(x - (ax + aw - r), dy), dr = Math.hypot(x - (ax + r), dy);
+    // arco apuntado: cada mitad es un arco centrado hacia el lado contrario
+    const dl = Math.hypot(x - (ax + r), dy), dr = Math.hypot(x - (ax + aw - r), dy);
     return x < cx ? dl <= r : dr <= r;
   }
 
   // ================================================================ FONDOS
+  // mesa de billar en perspectiva vista desde la barra: (cx, yTop, semiancho lejano, alto del paño, ensanche)
+  function pokerTable(g, cx, y0, hw, fh, spread) {
+    const ctx = g.ctx;
+    const P = (x, y, c) => { ctx.fillStyle = PAL[c]; ctx.fillRect(x, y, 1, 1); };
+    const rail = 6;
+    // patas y faldón
+    const yb = y0 + fh;
+    const fx0 = cx - hw - spread - rail, fx1 = cx + hw + spread + rail;
+    g.rect(fx0 + 14, yb + rail + 14, 14, 30, '0'); g.rect(fx1 - 28, yb + rail + 14, 14, 30, '0');
+    g.rect(fx0 + 16, yb + rail + 14, 4, 30, 'e'); g.rect(fx1 - 26, yb + rail + 14, 4, 30, 'e');
+    g.rect(fx0 - 1, yb + rail - 1, fx1 - fx0 + 2, 18, '0');
+    for (let y = yb + rail; y < yb + rail + 16; y++) for (let x = fx0; x < fx1; x++) {
+      const k = (y - yb - rail) / 16;
+      let v = 0.55 - k * 0.35 + (hash(x >> 2, 7) - 0.5) * 0.08;
+      if (y === yb + rail) v = 0.9;
+      const px = (x - fx0) % 64;
+      if (px < 2 || y === yb + rail + 15) v = 0.1;
+      P(x, y, pick(['0', 'e', 'f', 'g'], v, x, y));
+    }
+    // emblema: calavera de latón en el faldón
+    g.rows(cx - 4, yb + rail + 4, ['.ggggg.', 'ghhhhhg', 'h0hh0hg', 'ghhhhhf', '.g0g0f.', '..fff..'], null);
+    // banda (madera) alrededor del paño
+    for (let y = y0 - rail; y < yb + rail; y++) {
+      const k = clamp((y - y0) / fh, -0.3, 1.3);
+      const xl = Math.round(cx - hw - spread * k) - rail, xr = Math.round(cx + hw + spread * k) + rail;
+      for (let x = xl; x < xr; x++) {
+        const inFelt = y >= y0 && y < yb && x >= xl + rail && x < xr - rail;
+        if (inFelt) {
+          // paño: claro al centro (lámpara), oscuro a los lados, tramado sutil
+          const dx = (x - cx) / (hw + spread), dy = (y - y0 - fh * 0.45) / fh;
+          const v = 0.62 - dx * dx * 0.7 - dy * dy * 0.5 + (hash(x, y) < 0.05 ? -0.12 : 0);
+          P(x, y, pick(['j', 'k', 'l'], v, x, y));
+        } else {
+          let v = 0.55;
+          if (y === y0 - rail) v = 0.95; else if (y === y0 - rail + 1) v = 0.75;
+          if (y >= yb) v = 0.65 - (y - yb) / rail * 0.3;
+          if (y === yb + rail - 1) v = 0.1;
+          if (x === xl || x === xr - 1) v = 0.05;
+          // canto interior (cojín) más oscuro
+          if (y >= y0 - 2 && y < y0 && x > xl + rail - 2 && x < xr - rail + 1) v = 0.2;
+          if (y < yb && y >= y0 && (x === xl + rail - 1 || x === xr - rail)) v = 0.2;
+          P(x, y, pick(['0', 'e', 'f', 'g', 'h'], v, x, y));
+        }
+      }
+    }
+    // diamantes de banda
+    for (let i = 1; i < 8; i++) { if (i === 4) continue; const x = Math.round(cx - hw + (2 * hw) * i / 8); P(x, y0 - rail + 3, 'i'); }
+    // troneras
+    const pocket = (x, y) => { g.rect(x - 4, y - 2, 9, 5, '0'); g.rect(x - 3, y - 3, 7, 7, '0'); g.rect(x - 2, y - 2, 5, 1, '1'); };
+    pocket(cx - hw - 1, y0 - 1); pocket(cx + hw + 1, y0 - 1); pocket(cx, y0 - 3);
+    pocket(cx - hw - spread - 1, yb + 1); pocket(cx + hw + spread + 1, yb + 1); pocket(cx, yb + 3);
+    // bolas sobre el paño
+    const ball = (x, y, c, stripe) => {
+      g.rect(x - 2, y + 3, 6, 1, 'j');
+      g.rect(x - 2, y - 3, 5, 7, '0'); g.rect(x - 3, y - 2, 7, 5, '0');
+      g.rect(x - 2, y - 2, 5, 5, c); g.rect(x - 1, y - 3, 3, 1, c); g.rect(x - 1, y + 3, 3, 1, c);
+      if (stripe) { g.rect(x - 2, y - 2, 5, 1, '7'); g.rect(x - 2, y + 2, 5, 1, '7'); }
+      g.p(x - 1, y - 1, c === '1' ? '5' : '8'); g.rect(x + 1, y + 1, 2, 2, c === '7' ? '6' : c === '1' ? '0' : '9');
+      if (c === '1') { g.p(x, y, '7'); g.p(x + 1, y, '7'); }
+    };
+    ball(cx - 60, y0 + 14, '7'); ball(cx + 30, y0 + 10, '1'); ball(cx + 44, y0 + 20, 'c'); ball(cx + 52, y0 + 9, 'h', true);
+    ball(cx + 80, y0 + 24, 'q'); ball(cx - 110, y0 + 26, 'm', true);
+    // taco cruzado sobre la mesa
+    g.line(cx - 160, y0 + 34, cx - 66, y0 + 15, '0'); g.line(cx - 160, y0 + 33, cx - 66, y0 + 14, 'f'); g.line(cx - 160, y0 + 32, cx - 100, y0 + 20, 'e');
+    g.line(cx - 72, y0 + 16, cx - 66, y0 + 14, '7'); g.p(cx - 65, y0 + 14, 'q');
+  }
+  // pasada de iluminación: oscurece por pasos de paleta según light(x,y)∈[0,1] (solo en la carga)
+  const SHADE = { '0': '0', '1': '0', '2': '1', '3': '2', '4': '3', '5': '4', '6': '5', '7': '6', '8': '7', '9': '1', a: '9', b: 'a', c: 'b', d: 'c', e: '1', f: 'e', g: 'f', h: 'g', i: 'h', j: '0', k: 'j', l: 'k', m: 'l', n: 'm', o: '1', p: 'o', q: 'p', r: 'q', s: '2', t: 's', u: 't', v: 'g' };
+  function shadePass(m, light, steps) {
+    steps = steps || 3;
+    const w = m.c.width, h = m.c.height;
+    const img = m.ctx.getImageData(0, 0, w, h);
+    const d = new Uint32Array(img.data.buffer);
+    const rev = {};
+    for (const k in P32) rev[P32[k]] = k;
+    const S32 = {};
+    for (const k in P32) S32[P32[k]] = P32[SHADE[k]];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      let px = d[i];
+      if ((px >>> 24) === 0 || rev[px] === undefined) continue;
+      const dark = clamp(1 - light(x, y), 0, 1) * steps;
+      let n = Math.floor(dark);
+      if (dark - n > bayer(x, y)) n++;
+      for (let k = 0; k < n; k++) px = S32[px];
+      d[i] = px;
+    }
+    m.ctx.putImageData(img, 0, 0);
+  }
+
   const SCN = {}; // escena -> {base: canvas, draw(ctx,t)}
 
   // ---------- TÍTULO: sala gótica del bar con rosetón infernal, telones y velas
@@ -876,7 +977,7 @@ OM.UI = (function () {
       else if (d < 52) ramp = pane & 1 ? ['1', '9', 'a', 'b', 'c'] : ['1', 's', 't', 'u'];
       else ramp = pane & 1 ? ['1', 's', 't'] : ['1', '9', 'a', 'b'];
       const flick = hash(pane * 7, Math.floor(d / 6)) * 0.18;
-      B.set(x, y, pick(ramp, 0.25 + glow * 0.6 + flick, x, y));
+      B.set(x, y, pick(ramp, 0.1 + glow * 0.5 + flick * 0.6, x, y));
     }
     // ojo/pentáculo central del rosetón: un "8" ardiente
     const m = B.toCanvas();
@@ -917,15 +1018,8 @@ OM.UI = (function () {
       });
     };
     sconce(128, 160); sconce(512, 160);
-    // mesa de billar en primer plano (silueta abajo)
-    g.rect(150, 326, 340, 40, '0');
-    g.rect(150, 324, 340, 4, 'e'); g.rect(150, 324, 340, 1, 'g');
-    g.rect(156, 320, 328, 4, 'j'); g.rect(156, 320, 328, 1, 'k');
-    g.rect(146, 322, 10, 10, '0'); g.rect(484, 322, 10, 10, '0');
-    g.rect(147, 323, 8, 3, 'g'); g.rect(485, 323, 8, 3, 'g');
-    g.p(148, 323, 'i'); g.p(486, 323, 'i');
-    g.rect(160, 330, 320, 1, 'e');
-    for (let i = 0; i < 4; i++) g.rect(200 + i * 80, 332, 2, 2, 'f');
+    // mesa de billar en primer plano (perspectiva)
+    pokerTable(g, 320, 300, 250, 40, 34);
     return m.c;
   }
   function drawTitle(ctx, t) {
@@ -933,18 +1027,15 @@ OM.UI = (function () {
     ctx.drawImage(base, 0, 0);
     // pulso del rosetón (brillo rojo del infierno)
     const pulse = 0.5 + 0.5 * Math.sin(t * 1.3);
-    drawHalo(ctx, 320, 96, 64, 'c', 0.10 + pulse * 0.08);
-    drawHalo(ctx, 320, 96, 26, 'v', 0.12 + pulse * 0.12);
+    drawHalo(ctx, 320, 96, 70, 'b', 0.06 + pulse * 0.06);
+    drawHalo(ctx, 320, 96, 24, 'v', 0.06 + pulse * 0.08);
     // cadenas colgantes con leve balanceo
     chain(ctx, 70, 0, 110, Math.sin(t * 0.8) * 3);
     chain(ctx, 96, 0, 70, Math.sin(t * 0.9 + 1) * 2);
     chain(ctx, 570, 0, 96, Math.sin(t * 0.7 + 2) * 3);
     chain(ctx, 546, 0, 140, Math.sin(t * 0.85 + 3) * 3);
     // velas de los candelabros
-    [[117, 154], [128, 150], [139, 154], [501, 154], [512, 150], [523, 154]].forEach(([x, y], i) => {
-      const yy = i % 3 === 1 ? y - 0 : y;
-      flame(ctx, x, (i % 3 === 1 ? 150 : 154) - 0, t, i, true);
-    });
+    [[117, 154], [128, 150], [139, 154], [501, 154], [512, 150], [523, 154]].forEach(([x, y], i) => flame(ctx, x, y, t, i, true));
     const fl = (i) => 0.16 + 0.05 * Math.sin(t * 11 + i * 2) + 0.03 * Math.sin(t * 27 + i);
     drawHalo(ctx, 128, 146, 46, 'h', fl(0));
     drawHalo(ctx, 512, 146, 46, 'h', fl(1));
@@ -964,7 +1055,7 @@ OM.UI = (function () {
       { x: 320, y: 70, r: 300, s: 0.9, kind: 'warm', sy: 0.8 },
       { x: 560, y: 150, r: 90, s: 0.3, kind: 'red' },
     ];
-    const L = (x, y) => lightAt(lights, x, y, 0.18);
+    const L = (x, y) => ({ v: 1, warm: 0.6, red: 0 });
     // tablones verticales
     for (let y = 0; y < 262; y++) for (let x = 0; x < W; x++) {
       const pl = Math.floor(x / 22), lx = x % 22;
@@ -974,7 +1065,7 @@ OM.UI = (function () {
       if ((y + pl * 37) % 90 === 0 && lx > 2) tone = 0.15; // junta horizontal
       if (hash(x, y) < 0.02) tone -= 0.15;
       const l = L(x, y);
-      B.set(x, y, pick(chooseRamp({ cold: ['0', '1', '2', 'e', 'f'], warm: RAMP_WOOD.concat(['h']), red: RAMP_RED }, l, x, y), tone * l.v, x, y));
+      B.set(x, y, pick(['1', 'e', 'f', 'g'], tone * 0.85, x, y));
     }
     // mostrador
     for (let y = 262; y < H; y++) for (let x = 0; x < W; x++) {
@@ -989,7 +1080,7 @@ OM.UI = (function () {
         tone += Math.sin(x * 0.3 + y * 0.05) * 0.05;
       }
       const l = L(x, y);
-      B.set(x, y, pick(RAMP_WOOD.concat(['h']), tone * Math.min(1, l.v * 1.1), x, y));
+      B.set(x, y, pick(['0', 'e', 'f', 'g', 'h'], tone, x, y));
     }
     const m = B.toCanvas();
     const g = m.g;
@@ -1071,6 +1162,10 @@ OM.UI = (function () {
     for (let i = 0; i < 4; i++) { const cx = 90, cy = 260 - i * 2; g.rect(cx - 1, cy, 9, 3, '0'); g.rect(cx, cy, 7, 1, 'i'); g.rect(cx, cy + 1, 7, 1, 'g'); }
     candleBody(g, 586, 238, 22, 5); SHOP_CANDLES.push([588, 237, 1]);
     candleBody(g, 600, 248, 12, 4); SHOP_CANDLES.push([601, 247, 1]);
+    // iluminación: lámpara central cálida + velas; la puerta queda en tinieblas
+    const lamps = [{ x: 320, y: 70, r: 380, s: 0.9, sy: 0.7 }, { x: 588, y: 236, r: 70, s: 0.5 }];
+    SHOP_CANDLES.forEach(([x, y]) => lamps.push({ x, y: y - 3, r: 34, s: 0.35 }));
+    shadePass(m, (x, y) => clamp(0.38 + lightAt(lamps, x, y, 0).v * 1.1 - (y > 262 ? 0.1 : 0), 0, 1), 3);
     return m.c;
   }
   const SHOP_CANDLES = [];
@@ -1078,7 +1173,7 @@ OM.UI = (function () {
     ctx.drawImage(SCN.shop.base, 0, 0);
     // lámpara colgante que se balancea
     const sw = Math.sin(t * 1.1) * 4;
-    const lx = Math.round(320 + sw), ly = 46;
+    const lx = Math.round(320 + sw), ly = 26;
     ctx.fillStyle = PAL['0'];
     for (let y = 0; y < ly - 6; y += 1) { const xx = Math.round(320 + sw * (y / ly)); ctx.fillRect(xx, y, 1, 1); if (y % 4 === 0) { ctx.fillStyle = PAL['5']; ctx.fillRect(xx, y, 1, 1); ctx.fillStyle = PAL['0']; } }
     drawHalo(ctx, lx, ly + 6, 120, 'h', 0.07 + 0.015 * Math.sin(t * 9));
@@ -1106,35 +1201,51 @@ OM.UI = (function () {
   // ---------- MAPA: el embudo de los seis círculos con lava al fondo
   function buildMap() {
     const B = Buf(W, H);
-    // cielo de caverna: degradado a rojo lava hacia abajo
+    // suelo de roca alrededor del pozo (losas irregulares en perspectiva)
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const dx = (x - 320) / 320, dy = (y - 380) / 300;
-      const d = Math.sqrt(dx * dx * 0.6 + dy * dy);
-      const v = clamp(1.05 - d, 0, 1);
-      const n = (hash(x >> 2, y >> 2) - 0.5) * 0.06;
-      B.set(x, y, pick(['0', '1', '2', '9', 'a', 'b', 'v', 'h'], v * 0.95 + n, x, y));
+      const n1 = vnoise(x / 22, y / 9), n2 = vnoise(x / 7 + 40, y / 4);
+      let v = 0.2 + n1 * 0.22 + n2 * 0.08;
+      const cr = Math.abs(vnoise(x / 30 + 9, y / 12 + 3) - 0.5);
+      if (cr < 0.018) v = 0.06; else if (cr < 0.03) v += 0.1; // grietas con canto
+      v *= 0.55 + y / H * 0.6;
+      B.set(x, y, pick(['0', '1', '2', '3'], v, x, y));
     }
-    // anillos (círculos del infierno) de arriba (grande) a abajo (pequeño)
-    for (let i = 0; i < 6; i++) {
-      const cy = 64 + i * 46, rx = 330 - i * 44, ry = 18 - i * 1.6, th = 10 - i;
-      for (let y = Math.floor(cy - ry - 2); y < cy + ry + th + 2; y++) for (let x = Math.floor(320 - rx - 2); x < 320 + rx + 2; x++) {
+    // embudo de los círculos: cada nivel es una elipse; se ve su pared trasera (media luna superior)
+    // y su suelo; el siguiente nivel, más pequeño y hondo, se dibuja encima.
+    const levels = 7;
+    for (let i = 0; i < levels; i++) {
+      const rx = 360 * Math.pow(0.77, i), ry = rx * 0.27, cy = 92 + i * 38 - (i * i) * 1.2;
+      const wallH = Math.max(6, 30 * Math.pow(0.8, i));
+      const deep = i / (levels - 1);
+      const x0 = Math.max(0, Math.floor(320 - rx - 1)), x1 = Math.min(W, Math.ceil(320 + rx + 1));
+      const y0 = Math.max(0, Math.floor(cy - ry - 1)), y1 = Math.min(H, Math.ceil(cy + ry + wallH + 1));
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
         const nx = (x - 320) / rx;
-        if (Math.abs(nx) > 1) continue;
-        const ey = Math.sqrt(1 - nx * nx) * ry;
-        const top = cy + ey; // borde frontal del anillo (labio inferior de la elipse)
-        const back = cy - ey;
-        const jag = Math.round((hash(x >> 1, i) - 0.5) * 3);
-        if (y >= top + jag && y < top + th + jag) {
-          // pared frontal del saliente: iluminada desde abajo por la lava
-          const k = (y - top - jag) / th;
-          const v = 0.25 + k * 0.45 + (1 - Math.abs(nx)) * 0.2 + (i * 0.04);
-          B.set(x, y, pick(['0', '1', '9', 'a', 'b', 'd'], v + (hash(x, y) - 0.5) * 0.1, x, y));
-        } else if (y >= top - 2 + jag && y < top + jag) {
-          B.set(x, y, pick(['2', '3', '4', '5'], 0.4 + (1 - Math.abs(nx)) * 0.4, x, y)); // canto superior
-        } else if (y >= back && y < top - 2 + jag) {
-          // repisa (suelo del círculo): piedra púrpura oscura
-          const v = 0.3 + (y - back) / (top - back + 1) * 0.2 + (hash(x >> 1, y >> 1) - 0.5) * 0.1;
-          B.set(x, y, pick(['0', '1', '2', '3'], v, x, y));
+        const jag = (hash(x >> 1, i * 7) - 0.5) * 2.4;
+        const inTop = nx * nx + ((y - cy) / ry) ** 2 <= 1;                 // elipse del borde
+        const inFloor = nx * nx + ((y - cy - wallH) / ry) ** 2 <= 1;      // suelo, más abajo
+        if (!inTop) continue;
+        if (i === levels - 1) { // fondo: lago de lava
+          const d = Math.sqrt(nx * nx + ((y - cy - wallH * 0.5) / (ry + wallH * 0.5)) ** 2);
+          B.set(x, y, pick(['a', 'b', 'v', 'h', 'i', '8'], 1 - d * 0.9 + (hash(x >> 1, y) - 0.5) * 0.1, x, y));
+          continue;
+        }
+        if (inFloor && y > cy + jag) {
+          // suelo del círculo: piedra oscura, labio frontal iluminado por la lava de abajo
+          const ey = (y - cy - wallH) / ry;
+          const rim = 1 - (nx * nx + ey * ey);
+          let v = 0.32 + (hash(x >> 1, y >> 1) - 0.5) * 0.12 + deep * 0.08;
+          const ty = (y - cy) / ry, lip = 1 - (nx * nx + ty * ty); // canto del borde frontal del pozo
+          if (lip < 0.05 && ty > 0) { B.set(x, y, pick(['3', '4', '5', '6'], 0.35 + (1 - Math.abs(nx)) * 0.5, x, y)); continue; }
+          void rim;
+          B.set(x, y, pick(['0', '1', '2', '3', '9'], v, x, y));
+        } else {
+          // pared trasera: estratos verticales, más cálida hacia abajo (luz de lava)
+          const k = clamp((y - (cy - ry * Math.sqrt(Math.max(0, 1 - nx * nx)))) / (wallH + 1), 0, 1);
+          let v = 0.18 + k * 0.5 + (hash(x >> 1, i) - 0.5) * 0.18 + (1 - Math.abs(nx)) * 0.15;
+          if ((x + i * 3) % 9 === 0) v -= 0.06;
+          B.set(x, y, pick(['0', '1', '2', '9', 'a', 'b'], v * (0.75 + deep * 0.4), x, y));
+          if (k < 0.08) B.set(x, y, pick(['3', '4', '5'], 0.3 + (1 - Math.abs(nx)) * 0.5, x, y)); // canto
         }
       }
     }
@@ -1158,11 +1269,11 @@ OM.UI = (function () {
   function drawMap(ctx, t) {
     ctx.drawImage(SCN.map.base, 0, 0);
     const p = 0.5 + 0.5 * Math.sin(t * 1.7);
-    drawHalo(ctx, 320, 350, 120, 'v', 0.08 + p * 0.06);
-    drawHalo(ctx, 320, 356, 50, 'h', 0.10 + p * 0.08);
+    drawHalo(ctx, 320, 282, 110, 'b', 0.07 + p * 0.05);
+    drawHalo(ctx, 320, 282, 36, 'h', 0.10 + p * 0.08);
     drawFog(ctx, 120, 60, '9', 0.22, 7, t, 4);
     drawFog(ctx, 210, 70, 'a', 0.16, -9, t, 5);
-    embers(ctx, t, 60, 11, ['i', 'v', 'b'], 0, 360, 30);
+    embers(ctx, t, 60, 11, ['i', 'v', 'b'], 0, 290, 30);
     // ceniza que cae
     field(ctx, t, 40, 21, (a, b, c, i) => {
       const y = Math.round(((b * H + t * (8 + c * 10)) % H));
@@ -1180,27 +1291,44 @@ OM.UI = (function () {
       const v = clamp(0.7 - Math.sqrt(dx * dx + dy * dy), 0, 1);
       B.set(x, y, pick(['0', '1', '9', 'a'], v * 0.8 + (hash(x >> 1, y >> 1) - 0.5) * 0.05, x, y));
     }
-    // bola 8 gigante en sombra con grieta
-    const cx = 320, cy = 170, R = 100;
-    for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++) {
-      const dx = x - cx, dy = y - cy, d = Math.sqrt(dx * dx + dy * dy);
-      if (d > R) continue;
-      const nz = Math.sqrt(1 - (d / R) * (d / R));
-      const lit = clamp((-dx * 0.4 - dy * 0.6) / R * 0.5 + nz * 0.5, 0, 1);
-      let col = pick(['0', '1', '2', '3'], lit * 0.75, x, y);
-      if (d > R - 3 && dy > 0) col = pick(['9', 'a', 'b'], (d - R + 3) / 3 * (dy / R) + 0.2, x, y); // borde rojo
-      // círculo blanco del "8"
-      const wx = x - (cx - 14), wy = y - (cy - 20);
-      if (wx * wx + wy * wy < 40 * 40) col = pick(['1', '2', '3', '4', '5'], 0.3 + lit * 0.5, x, y);
+    // charco de sangre bajo la bola
+    const px0 = 320, py0 = 292;
+    for (let y = py0 - 30; y < py0 + 34; y++) for (let x = 60; x < 580; x++) {
+      const ex = (x - px0) / (230 + Math.sin(x * 0.07) * 6), ey = (y - py0) / 26;
+      const d = ex * ex + ey * ey;
+      if (d > 1) continue;
+      let v = 0.3 + (1 - d) * 0.25 + (ey < -0.2 ? 0.1 : 0);
+      if (d > 0.9) v = 0.15;
+      if (hash(x, y) < 0.02 && ey < 0) v = 0.85; // brillos
+      const sx = (x - px0) / 120, sy = (y - py0 + 4) / 12; if (sx * sx + sy * sy < 1) v = 0.05 + (sx * sx + sy * sy) * 0.2; // sombra de contacto
+      B.set(x, y, pick(['0', '9', 'a', 'b', 'c'], v, x, y));
+    }
+    // bola 8 gigante, agrietada y medio hundida en el charco
+    const cx = 320, cy = py0 - 104 - 2, R = 104;
+    for (let y = cy - R - 1; y <= cy + R + 1; y++) for (let x = cx - R - 1; x <= cx + R + 1; x++) {
+      const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
+      if (d2 > (R + 1) * (R + 1)) continue;
+      if (d2 > R * R) { B.set(x, y, '0'); continue; }
+      const nx = dx / R, ny = dy / R, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+      const lit = clamp(-nx * 0.35 - ny * 0.55 + nz * 0.6, 0, 1);
+      let col = pick(['0', '1', '2', '3', '4'], lit * 0.8, x, y);
+      const rim = nx * 0.4 + ny * 0.8;
+      if (rim > 0.6 && nz < 0.55) col = pick(['1', '9', 'a', 'b', 'c'], (rim - 0.6) * 2.6, x, y); // luz del charco
+      // círculo del número (marfil sucio en penumbra)
+      const wx = x - (cx - 18), wy = y - (cy - 26);
+      const wd = wx * wx + wy * wy * 1.05;
+      if (wd < 44 * 44) col = pick(['2', '3', '4', '5', '6', '7'], 0.15 + lit * 0.75, x, y);
+      else if (wd < 46 * 46) col = '1';
       B.set(x, y, col);
     }
+    // sombra donde la bola toca el charco
     const m = B.toCanvas();
     const g = m.g;
-    // el "8" (dos anillos) sobre el círculo
-    const ring8 = (x, y, r, th) => { for (let k = 0; k < th; k++) g.ring(x, y, r - k, '1'); };
-    ring8(cx - 14, cy - 40, 13, 6); ring8(cx - 14, cy - 2, 17, 7);
+    // el "8" (máscara display escalada x4)
+    const m8 = scale2x(scale2x(glyphMask('8', 0)));
+    for (let y = 0; y < m8.h; y++) for (let x = 0; x < m8.w; x++) if (m8.m[y * m8.w + x]) g.p(cx - 18 - (m8.w >> 1) + x, cy - 26 - (m8.h >> 1) + y, y > m8.h * 0.6 ? '0' : '1');
     // grieta brillante
-    let x = cx + 40, y = cy - R + 8;
+    let x = cx + 46, y = cy - R + 10;
     const crack = [[x, y]];
     for (let i = 0; i < 22; i++) { x += Math.round((hash(i, 3) - 0.6) * 10); y += 8 + Math.round(hash(i, 5) * 4); crack.push([x, y]); if (Math.hypot(x - cx, y - cy) > R - 4) break; }
     for (let i = 1; i < crack.length; i++) { g.line(crack[i - 1][0] + 1, crack[i - 1][1], crack[i][0] + 1, crack[i][1], '0'); g.line(crack[i - 1][0], crack[i - 1][1], crack[i][0], crack[i][1], 'b'); }
@@ -1241,70 +1369,98 @@ OM.UI = (function () {
   }
 
   // ---------- VICTORIA: amanecer dorado fuera del infierno, rayos y monedas
-  let RAYS = null;
+  let RAYS = null, VFRONT = null;
   function buildVictory() {
+    // cielo de amanecer: degradado radial limpio desde el sol (320,150)
     const B = Buf(W, H);
+    const SKY = ['1', '2', 's', 't', 'b', 'c', 'v', 'h', 'i', '8'];
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const dx = (x - 320) / 400, dy = (y - 150) / 260;
+      const dx = (x - 320) / 420, dy = (y - 160) / 230;
       const d = Math.sqrt(dx * dx + dy * dy);
-      const v = clamp(1 - d * 1.15, 0, 1);
-      B.set(x, y, pick(['1', '2', 's', 't', 'b', 'v', 'h', 'i', '8'], v + (hash(x >> 2, y >> 3) - 0.5) * 0.04, x, y));
+      B.set(x, y, pick(SKY, clamp(1 - d * 1.05, 0, 1), x, y));
     }
-    // nubes en capas
-    for (let k = 0; k < 3; k++) {
-      const base = 220 + k * 30;
-      for (let x = 0; x < W; x++) {
-        const top = base - (Math.sin(x * 0.03 + k * 2) * 10 + Math.sin(x * 0.081 + k) * 6 + Math.abs(Math.sin(x * 0.013 + k * 4)) * 18);
-        for (let y = Math.floor(top); y < H; y++) {
-          const v = 0.55 - k * 0.12 - (y - top) * 0.01 + (y - top < 2 ? 0.3 : 0);
-          B.set(x, y, pick(['1', '2', '3', '4', '5', '6', '7'], v, x, y));
-        }
-      }
+    // sol
+    for (let y = 120; y < 200; y++) for (let x = 280; x < 360; x++) {
+      const d = Math.hypot(x - 320, y - 160);
+      if (d < 26) B.set(x, y, d < 23 ? (d < 18 ? '8' : 'i') : 'h');
     }
-    const m = B.toCanvas();
-    const g = m.g;
-    // puertas del infierno abiertas (silueta)
-    const gate = (x0, flip) => {
-      for (let y = 120; y < H; y++) for (let x = 0; x < 120; x++) {
-        const gx = flip ? W - 1 - (x0 + x) : x0 + x;
-        const r = (y - 120) / 240;
-        if (x > 60 + r * 40 + Math.sin(y * 0.1) * 2) continue;
-        let c = '1';
-        if (x % 14 === 0 || y % 30 === 0) c = '0';
-        if ((x % 14 === 1) && y % 6 < 3) c = '3';
-        g.p(gx, y, c);
-      }
-      // púas
-      for (let x = 0; x < 64; x += 7) { const gx = flip ? W - 1 - (x0 + x) : x0 + x; g.rect(gx - 1, 112, 3, 8, '0'); g.p(gx, 108, '0'); g.p(gx, 110, '1'); }
-    };
-    gate(0, false); gate(0, true);
-    // rayos (rueda pre-renderizada)
+    const base = B.toCanvas();
+    // rayos (rueda pre-renderizada; se gira y se suma con 'lighter')
     const rs = 760;
     const rm = mk(rs, rs);
-    rm.ctx.fillStyle = PAL['i'];
+    rm.ctx.fillStyle = PAL['h'];
     for (let y = 0; y < rs; y++) for (let x = 0; x < rs; x++) {
       const a = Math.atan2(y - rs / 2, x - rs / 2);
-      const s = Math.sin(a * 12);
+      const sn = Math.sin(a * 9) + 0.35 * Math.sin(a * 23);
       const d = Math.hypot(x - rs / 2, y - rs / 2);
-      if (s > 0.55 && d > 30 && bayer(x, y) < 0.9 - d / rs) rm.ctx.fillRect(x, y, 1, 1);
+      if (sn > 0.6 && d > 34 && bayer(x, y) < 1 - d / (rs * 0.55)) rm.ctx.fillRect(x, y, 1, 1);
     }
     RAYS = rm.c;
-    return m.c;
+    // capa frontal: nubes cúmulo iluminadas desde el sol + riscos del infierno abajo
+    const F = mk(W, H);
+    const fc = F.ctx;
+    const P = (x, y, k) => { fc.fillStyle = PAL[k]; fc.fillRect(x, y, 1, 1); };
+    const layers = [
+      { y: 222, n: 26, r: [14, 46], ramp: ['3', '4', '5', '6', '7', '8'], seed: 1 },
+      { y: 262, n: 22, r: [18, 52], ramp: ['2', '3', '4', '5', '6', '7'], seed: 2 },
+      { y: 304, n: 18, r: [22, 60], ramp: ['1', '2', '3', '4', '5'], seed: 3 },
+    ];
+    layers.forEach((L) => {
+      const blobs = [];
+      for (let i = 0; i < L.n; i++) blobs.push([(i + hash(i, L.seed) * 0.9) * (W + 80) / L.n - 40, L.y + (hash(L.seed, i) - 0.5) * 14, L.r[0] + Math.pow(hash(i * 3, L.seed), 1.6) * (L.r[1] - L.r[0])]);
+      // silueta superior = envolvente de las bolas de nube; sombreado por profundidad bajo el borde
+      for (let x = 0; x < W; x++) {
+        let top = L.y + 12;
+        for (const [cx, cy, r] of blobs) { const dx = x - cx; if (Math.abs(dx) < r) top = Math.min(top, cy - Math.sqrt(r * r - dx * dx) / 2.1); }
+        top = Math.round(top);
+        const sunK = Math.max(0, 1 - Math.abs(x - 320) / 300);
+        for (let y = top; y < H; y++) {
+          const dep = y - top;
+          // contornos internos de los "copos" (bordes superiores de bolas interiores)
+          let puff = 0;
+          for (const [cx, cy, r] of blobs) {
+            const dd = Math.hypot(x - cx, (y - cy) * 2.1);
+            if (y < cy && dd > r - 1.5 && dd <= r && dep > 4 && r > 30 && Math.abs(x - cx) < r * 0.6) puff = 1;
+          }
+          let k;
+          if (dep < 2) k = pick(['6', 'd', 'i', '8'], 0.25 + sunK * 0.7 - L.seed * 0.12, x, y);
+          else if (puff) k = pick(L.ramp, 0.62 + sunK * 0.2 - (y - L.y) / 160, x, y);
+          else k = pick(L.ramp, clamp(0.5 + sunK * 0.18 - dep / 46 - (y - L.y) / 200, 0, 1), x, y);
+          P(x, y, k);
+        }
+      }
+    });
+    // riscos negros a los lados con cadenas rotas (hemos salido del infierno)
+    for (let x = 0; x < W; x++) {
+      const side = Math.min(x, W - 1 - x);
+      const top = 150 + side * 1.6 + Math.sin(x * 0.21) * 6 + Math.sin(x * 0.05) * 14 - (hash(x >> 3, 5) < 0.2 ? 18 : 0);
+      for (let y = Math.max(0, Math.floor(top)); y < H; y++) {
+        const edge = y - top < 2;
+        P(x, y, edge ? (x < 320 ? '4' : '3') : pick(['0', '1', '2'], 0.3 + (hash(x >> 2, y >> 2) - 0.5) * 0.3, x, y));
+      }
+    }
+    VFRONT = F.c;
+    return base.c;
   }
   function drawVictory(ctx, t) {
     ctx.drawImage(SCN.victory.base, 0, 0);
     ctx.save();
-    ctx.globalAlpha = 0.18 + 0.05 * Math.sin(t * 2);
-    ctx.translate(320, 150);
-    ctx.rotate(t * 0.12);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.16 + 0.05 * Math.sin(t * 2);
+    ctx.beginPath(); ctx.rect(0, 0, W, 236); ctx.clip(); // las nubes tapan el resto
+    ctx.translate(320, 160);
+    ctx.rotate(t * 0.1);
     ctx.drawImage(RAYS, -RAYS.width / 2, -RAYS.height / 2);
     ctx.restore();
-    drawHalo(ctx, 320, 150, 70, '8', 0.18 + 0.05 * Math.sin(t * 3));
+    drawHalo(ctx, 320, 160, 60, '8', 0.14 + 0.05 * Math.sin(t * 3));
+    // nubes con deriva lenta (paralaje leve)
+    const dx = Math.round(Math.sin(t * 0.2) * 3);
+    ctx.drawImage(VFRONT, dx, 0);
     // destellos
     field(ctx, t, 30, 41, (a, b, c, i) => {
       const s = Math.sin(t * (2 + c * 3) + i * 1.7);
       if (s < 0.6) return;
-      const x = Math.round(a * W), y = Math.round(b * 220);
+      const x = Math.round(a * W), y = Math.round(b * 200);
       ctx.fillStyle = PAL[s > 0.9 ? '8' : 'i'];
       ctx.fillRect(x, y, 1, 1);
       if (s > 0.85) { ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y - 1, 1, 3); }
@@ -1320,7 +1476,6 @@ OM.UI = (function () {
       if (w > 1) { ctx.fillStyle = PAL['i']; ctx.fillRect(x - (w >> 1), y, 1, 3); }
     });
     embers(ctx, t, 40, 13, ['8', 'i', 'h'], 100, 360, 20);
-    drawFog(ctx, 270, 90, '7', 0.18, 8, t, 7);
   }
 
   SCN.title = { build: buildTitle, draw: drawTitle };
@@ -1407,7 +1562,7 @@ OM.UI = (function () {
     const at = (Mk, x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : Mk.m[y * w + x]);
     const P = (x, y, k) => { ctx.fillStyle = PAL[k]; ctx.fillRect(x, y, 1, 1); };
     // extrusión (profundidad) hacia abajo
-    for (let d = o.depth; d >= 1; d--) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (out2.m[y * w + x]) P(x, y + d, d === o.depth ? '0' : o.extrude[(x + y) & 1 ? 0 : Math.min(o.extrude.length - 1, 1)]);
+    for (let d = o.depth; d >= 1; d--) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (out2.m[y * w + x]) P(x, y + d, d === o.depth ? '0' : d === 1 ? o.extrude[1] : o.extrude[0]);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (out2.m[y * w + x] && !out1.m[y * w + x]) P(x, y, o.outer);
       if (out1.m[y * w + x] && !body.m[y * w + x]) P(x, y, '0');
@@ -1416,8 +1571,12 @@ OM.UI = (function () {
     const top = pad, bh = M.h;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (!body.m[y * w + x]) continue;
-      const v = 1 - (y - top) / bh;
-      let k = pick(o.ramp, v * 0.9 + 0.05, x, y);
+      // bandas planas con una sola fila tramada en cada transición (más limpio que el tramado continuo)
+      const f = ((y - top) / bh) * o.ramp.length;
+      let bi = Math.floor(f);
+      const fr = f - bi;
+      if (fr < 1 / (bh / o.ramp.length) && bi > 0 && ((x + y) & 1)) bi--;
+      let k = o.ramp[o.ramp.length - 1 - Math.min(o.ramp.length - 1, bi)];
       const up = at(body, x, y - 1), up2 = at(body, x, y - 2), dn = at(body, x, y + 1), lf = at(body, x - 1, y), rt = at(body, x + 1, y);
       if (!up) k = o.hi; else if (!up2) k = o.hi2;
       else if (!dn) k = o.lo;
@@ -1434,7 +1593,7 @@ OM.UI = (function () {
     if (LOGO.ready) return;
     // OCHO (sin la primera O)
     const m1 = scale2x(scale2x(glyphMask('CHO', 1)));
-    const m2 = scale3x(glyphMask('MALDITO', 1));
+    const m2 = scale2x(scale2x(glyphMask('MALDITO', 1)));
     LOGO.w1 = paintWord(m1, {
       ramp: ['f', 'g', 'h', 'i'], hi: '8', hi2: 'i', lo: 'f', side: 'i', outer: 'e', extrude: ['e', 'f'], depth: 5, band: 'i',
     });
@@ -1446,7 +1605,7 @@ OM.UI = (function () {
     const gm = mk(glow.w, glow.h);
     gm.ctx.fillStyle = PAL['b'];
     for (let y = 0; y < glow.h; y++) for (let x = 0; x < glow.w; x++) if (glow.m[y * glow.w + x] && ((x + y) & 1)) gm.ctx.fillRect(x, y, 1, 1);
-    LOGO.glow2 = gm.c; LOGO.glowPad = 8 - 3;
+    LOGO.glow2 = gm.c; LOGO.glowPad = 0;
     // máscara de brillo para el barrido de luz sobre OCHO
     const s1 = mk(LOGO.w1.w, LOGO.w1.h);
     s1.ctx.fillStyle = PAL['8'];
@@ -1454,10 +1613,10 @@ OM.UI = (function () {
     for (let y = 0; y < b1.h; y++) for (let x = 0; x < b1.w; x++) if (b1.m[y * b1.w + x]) s1.ctx.fillRect(x, y, 1, 1);
     LOGO.shine1 = s1.c;
     const s2 = mk(LOGO.w2.w, LOGO.w2.h);
-    s2.ctx.fillStyle = PAL['d'];
+    s2.ctx.fillStyle = PAL['1'];
     const b2 = LOGO.w2.body;
     for (let y = 0; y < b2.h; y++) for (let x = 0; x < b2.w; x++) if (b2.m[y * b2.w + x]) s2.ctx.fillRect(x, y, 1, 1);
-    LOGO.shine2 = s2.c;
+    LOGO.shade2 = s2.c;
     // puntos de goteo: columnas del borde inferior de MALDITO
     const drips = [];
     const bm = LOGO.w2.body;
@@ -1474,41 +1633,23 @@ OM.UI = (function () {
     }
     LOGO.drips = drips;
     // bola 8 cornuda
-    const R = 23, S = R * 2 + 12;
+    const R = 28, S = R * 2 + 12;
     const bc = mk(S, S + 14);
     const g = bc.g;
     const cx = S >> 1, cy = (S >> 1) + 10;
-    // cuernos
-    const horn = (dir) => {
-      for (let i = 0; i < 14; i++) {
-        const t = i / 13;
-        const x = Math.round(cx + dir * (11 + t * 9 + t * t * 2));
-        const y = Math.round(cy - R + 6 - t * 15 + t * t * 2);
-        const wdt = Math.max(1, Math.round((1 - t) * 4));
-        for (let k = -wdt; k <= wdt; k++) g.p(x + k * dir * 0, y + k, '0');
-      }
-      for (let i = 0; i < 14; i++) {
-        const t = i / 13;
-        const x = Math.round(cx + dir * (11 + t * 9 + t * t * 2));
-        const y = Math.round(cy - R + 6 - t * 15 + t * t * 2);
-        const wdt = Math.max(0, Math.round((1 - t) * 4) - 1);
-        for (let k = -wdt; k <= wdt; k++) g.p(x, y + k, k < 0 ? 'c' : k === 0 ? 'b' : 'a');
-        if (wdt === 0) g.p(x, y, t > 0.9 ? 'd' : 'b');
-      }
-    };
+    // cuernos (contorno '0' engordado y luego relleno con sombreado)
     // contorno de cuernos con dilatación manual: dibujar en '0' más grueso primero
     const hornShape = (dir, col, grow) => {
       for (let i = 0; i <= 26; i++) {
         const t = i / 26;
-        const x = cx + dir * (10 + t * 10 + t * t * 3);
-        const y = cy - R + 7 - t * 16 + t * t * 3;
-        const wd = (1 - t) * 3.2 + 0.6 + grow;
+        const x = cx + dir * (10 + t * 19 - t * t * 7);
+        const y = cy - R + 11 - t * 27 + t * t * 5;
+        const wd = (1 - t) * 5 + 0.4 + grow;
         for (let j = -Math.ceil(wd); j <= Math.ceil(wd); j++) for (let k = -Math.ceil(wd); k <= Math.ceil(wd); k++) if (j * j + k * k <= wd * wd) g.p(Math.round(x + k), Math.round(y + j), typeof col === 'function' ? col(j, k, t) : col);
       }
     };
     [-1, 1].forEach((dir) => hornShape(dir, '0', 1));
     [-1, 1].forEach((dir) => hornShape(dir, (j, k, t) => (t > 0.85 ? 'd' : j < -1 || k * dir < -1 ? 'c' : j > 1 ? 'a' : 'b'), 0));
-    void horn;
     // esfera
     for (let y = -R - 1; y <= R + 1; y++) for (let x = -R - 1; x <= R + 1; x++) {
       const d2 = x * x + y * y;
@@ -1523,7 +1664,7 @@ OM.UI = (function () {
       g.p(cx + x, cy + y, k);
     }
     // círculo blanco
-    const wx = cx - 3, wy = cy - 4, wr = 12;
+    const wx = cx - 4, wy = cy - 5, wr = 15;
     for (let y = -wr - 1; y <= wr + 1; y++) for (let x = -wr - 1; x <= wr + 1; x++) {
       const d2 = x * x + y * y * 1.08;
       if (d2 > (wr + 1) * (wr + 1)) continue;
@@ -1533,14 +1674,16 @@ OM.UI = (function () {
     }
     // "8" en display
     LOGO.ball = bc.c; LOGO.ballCx = cx; LOGO.ballCy = cy; LOGO.ballR = R;
-    OM.FONT.draw(bc.ctx, '8', wx - 3, wy - 5, { size: 2, color: '0', grad: false });
+    const m8 = scale2x(glyphMask('8', 0));
+    bc.ctx.fillStyle = PAL['1'];
+    for (let y = 0; y < m8.h; y++) for (let x = 0; x < m8.w; x++) if (m8.m[y * m8.w + x]) bc.ctx.fillRect(wx - (m8.w >> 1) + x, wy - (m8.h >> 1) + y, 1, 1);
     // brillo especular
-    g.rect(cx - 15, cy - 15, 3, 2, '6'); g.rect(cx - 16, cy - 13, 2, 3, '5'); g.p(cx - 14, cy - 16, '7'); g.p(cx - 13, cy - 15, '8');
+    g.rect(cx - 19, cy - 17, 4, 2, '6'); g.rect(cx - 21, cy - 15, 2, 4, '5'); g.rect(cx - 17, cy - 19, 3, 1, '7'); g.p(cx - 16, cy - 18, '8');
     LOGO.ready = true;
     // métricas: línea 1 = bola + "CHO"; línea 2 = MALDITO
     LOGO.l1w = S - 6 + LOGO.w1.w - 2 * LOGO.w1.pad;
     LOGO.width = Math.max(LOGO.l1w, LOGO.w2.w - 2 * LOGO.w2.pad);
-    LOGO.height = 120;
+    LOGO.height = 142;
   }
   function logo(ctx, x, y, t) {
     buildLogo();
@@ -1552,7 +1695,7 @@ OM.UI = (function () {
     const w1 = L.w1, w2 = L.w2;
     // --- línea 2: MALDITO (neón rojo con parpadeo de fallo)
     const l2x = x - ((w2.w - 2 * w2.pad) >> 1) - w2.pad;
-    const l2y = y + 50 - w2.pad;
+    const l2y = y + 72 - w2.pad;
     // patrón de parpadeo de neón defectuoso
     const cyc = t % 5.2;
     const flick = (cyc > 3.0 && cyc < 3.08) || (cyc > 3.16 && cyc < 3.2) || (cyc > 4.6 && cyc < 4.64);
@@ -1561,32 +1704,38 @@ OM.UI = (function () {
     ctx.drawImage(L.glow2, l2x + L.glowPad, l2y + L.glowPad);
     ctx.restore();
     ctx.drawImage(w2.c, l2x, l2y);
-    if (flick) { ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = PAL['0']; ctx.drawImage(L.shine2, l2x, l2y); ctx.globalCompositeOperation = 'source-atop'; ctx.restore(); }
-    // goteo de sangre
-    L.drips.forEach((d, i) => {
+    if (flick) { ctx.save(); ctx.globalAlpha = 0.6; ctx.drawImage(L.shade2, l2x, l2y); ctx.restore(); }
+    // goteo de sangre (gota que crece, se estira y cae)
+    L.drips.forEach((d) => {
       const per = 2.6 + d.sp * 2;
       const ph = ((t * 0.9 + d.ph * per) % per) / per;
-      const base = l2x + d.x, by = l2y + d.y;
-      const grow = Math.min(1, ph / 0.6);
-      const len = Math.round(2 + grow * d.len);
-      ctx.fillStyle = PAL['0']; ctx.fillRect(base - 1, by, 3, len + 1);
-      ctx.fillStyle = PAL['a']; ctx.fillRect(base, by, 1, len);
-      ctx.fillStyle = PAL['b']; ctx.fillRect(base, by, 1, Math.max(1, len - 2));
-      if (ph < 0.6) { ctx.fillStyle = PAL['0']; ctx.fillRect(base - 2, by + len - 2, 5, 4); ctx.fillStyle = PAL['a']; ctx.fillRect(base - 1, by + len - 2, 3, 3); ctx.fillStyle = PAL['c']; ctx.fillRect(base - 1, by + len - 2, 1, 1); }
-      else { // la gota cae
-        const f = (ph - 0.6) / 0.4;
-        const yy = by + len + Math.round(f * f * 40);
-        ctx.fillStyle = PAL['a']; ctx.fillRect(base, yy, 1, 2); ctx.fillStyle = PAL['c']; ctx.fillRect(base, yy, 1, 1);
+      const bx = l2x + d.x, by = l2y + d.y - 1;
+      const grow = Math.min(1, ph / 0.62);
+      const len = Math.round(1 + grow * d.len);
+      const R = (xx, yy, ww, hh, c) => { ctx.fillStyle = PAL[c]; ctx.fillRect(xx, yy, ww, hh); };
+      R(bx - 1, by, 4, len + 1, '0');
+      R(bx, by, 2, len, 'b'); R(bx + 1, by, 1, len, 'a');
+      if (ph < 0.62) { // cabeza de la gota colgando
+        const hy = by + len - 1;
+        R(bx - 1, hy - 1, 4, 5, '0'); R(bx - 2, hy, 6, 3, '0');
+        R(bx - 1, hy, 4, 3, 'b'); R(bx, hy - 1, 2, 4, 'b');
+        R(bx + 1, hy + 1, 2, 2, 'a'); R(bx - 1, hy, 1, 1, 'd');
+      } else { // la gota cae y se aleja
+        const f = (ph - 0.62) / 0.38;
+        const yy = by + len + 2 + Math.round(f * f * 46);
+        R(bx - 1, yy - 1, 4, 5, '0');
+        R(bx, yy, 2, 3, 'b'); R(bx, yy, 1, 1, 'd'); R(bx + 1, yy + 2, 1, 1, 'a');
       }
     });
     // --- línea 1: [bola] CHO
     const S = L.ball.width;
     const l1x = x - (L.l1w >> 1);
     const bob = Math.round(Math.sin(t * 2.2) * 1.5);
-    const l1y = y + 4;
+    const l1y = y + 18;
     // aura maldita de la bola
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.7);
-    drawHalo(ctx, l1x + L.ballCx, l1y + L.ballCy - 10 + bob + 6, 34, 'b', 0.16 + pulse * 0.14);
+    const by0 = l1y + 22 - L.ballCy + bob;
+    drawHalo(ctx, l1x + L.ballCx, by0 + L.ballCy, 40, 'b', 0.16 + pulse * 0.14);
     ctx.drawImage(w1.c, l1x + S - 6 - w1.pad, l1y - w1.pad);
     // barrido de brillo cada 4 s sobre OCHO
     const sw = (t % 4) / 1.1;
@@ -1601,10 +1750,10 @@ OM.UI = (function () {
       ctx.drawImage(L.shine1, l1x + S - 6 - w1.pad, l1y - w1.pad);
       ctx.restore();
     }
-    ctx.drawImage(L.ball, l1x, l1y - 10 + bob + 0);
+    ctx.drawImage(L.ball, l1x, by0);
     // ojo: destello en la bola
     if ((t % 3.3) < 0.25) {
-      const sx = l1x + L.ballCx + 10, sy = l1y + L.ballCy - 10 + bob - 12;
+      const sx = l1x + L.ballCx + 13, sy = by0 + L.ballCy - 14;
       ctx.fillStyle = PAL['8']; ctx.fillRect(sx, sy - 2, 1, 5); ctx.fillRect(sx - 2, sy, 5, 1);
     }
     ctx.imageSmoothingEnabled = prev;

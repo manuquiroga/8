@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>OCHO MALDITO — fondos de escena</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; width: 640px; height: 360px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/art/font.js"></script>
+<script src="../src/art/ui_art.js"></script>
+<script src="../src/art/fx.js"></script>
+<script>
+// Fondos animados de escena.
+//   ?scene=title|shop|map|gameover|victory   (por defecto: mosaico con los 5 a media escala)
+//   &ui=1   superpone una maqueta de la UI de esa escena (logo, botones, paneles) para juzgar legibilidad
+//   &anim=1 animado   &t=2.5 tiempo congelado
+(OM.ART_INIT || []).forEach((f) => f());
+const q = new URLSearchParams(location.search);
+const scene = q.get('scene') || 'all';
+const ui = q.get('ui') === '1';
+const anim = q.get('anim') === '1';
+const T = parseFloat(q.get('t') || '1.7');
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const F = OM.FONT, U = OM.UI;
+const SC = ['title', 'shop', 'map', 'gameover', 'victory'];
+
+function mock(ctx, s, t) {
+  if (s === 'title') {
+    U.logo(ctx, 320, 26, t);
+    ['NUEVA PARTIDA', 'COLECCIÓN', 'AJUSTES'].forEach((l, i) => U.button(ctx, 250, 186 + i * 30, 140, 24, l, i === 0 ? 'hover' : 'idle', i === 0 ? 'red' : 'dark'));
+    F.draw(ctx, 'v0.1 · un billar en el infierno', 320, 346, { align: 'center', color: '5' });
+  } else if (s === 'shop') {
+    U.panel(ctx, 120, 70, 400, 180, 'gold');
+    F.draw(ctx, 'LA TIENDA DEL DIABLO', 320, 80, { align: 'center', size: 2, color: 'h', outline: '0', shadow: '0' });
+    U.button(ctx, 140, 214, 100, 24, 'REROLL $5', 'idle', 'green');
+    U.button(ctx, 400, 214, 100, 24, 'SEGUIR', 'idle', 'red');
+  } else if (s === 'map') {
+    F.draw(ctx, 'CÍRCULO I · LIMBO', 320, 14, { align: 'center', size: 2, color: '7', outline: '0', shadow: '0' });
+    [[200, 150], [320, 150], [440, 150]].forEach(([x, y], i) => { U.panel(ctx, x - 40, y - 30, 80, 60, i === 2 ? 'blood' : 'dark'); F.draw(ctx, ['MENOR', 'MAYOR', 'JEFE'][i], x, y - 4, { align: 'center', color: i === 2 ? 'c' : '7', shadow: '0' }); });
+  } else if (s === 'gameover') {
+    F.draw(ctx, 'HAS CAÍDO', 320, 120, { align: 'center', size: 2, scale: 2, color: 'c', outline: '0', shadow: '0' });
+    F.draw(ctx, 'Círculo III · Gula', 320, 160, { align: 'center', color: '7', shadow: '0' });
+    U.button(ctx, 260, 250, 120, 24, 'OTRA VEZ', 'idle', 'red');
+  } else if (s === 'victory') {
+    F.draw(ctx, '¡HAS ESCAPADO!', 320, 110, { align: 'center', size: 2, scale: 2, color: 'h', outline: '0', shadow: '0' });
+    U.button(ctx, 250, 250, 140, 24, 'MODO INFINITO', 'idle', 'gold');
+  }
+}
+
+function render(t) {
+  if (scene === 'all') {
+    // mosaico 3x2 a 1/3 de escala (solo para vista general)
+    const off = document.createElement('canvas'); off.width = 640; off.height = 360;
+    const o = off.getContext('2d'); o.imageSmoothingEnabled = false;
+    ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 0, 640, 360);
+    SC.forEach((s, i) => {
+      U.drawBackground(o, t, s);
+      if (ui) mock(o, s, t);
+      const x = (i % 3) * 213, y = Math.floor(i / 3) * 122;
+      ctx.drawImage(off, x, y, 213, 120);
+      F.draw(ctx, s, x + 4, y + 4, { color: '8', outline: '0' });
+    });
+  } else {
+    U.drawBackground(ctx, t, scene);
+    if (ui) mock(ctx, scene, t);
+  }
+}
+if (anim) {
+  const t0 = performance.now();
+  (function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop); })();
+} else render(T);
+</script>
+</body>
+</html>

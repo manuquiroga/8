@@ -731,6 +731,8 @@ OM.ART_INIT = OM.ART_INIT || [];
     5: ['e', 'g', 'v', 'd'], 6: ['j', 'l', 'm', 'n'], 7: ['1', '9', 'a', 'b'], 8: ['0', '1', '2', '4'],
   };
   const WHITE = ['5', '6', '7', '8'];
+  const CUE_W = ['6', '7', '8', '8'];   // blanca: hueso brillante, inconfundible
+  const STRIPE_W = ['4', '5', '6', '7']; // casquetes de rayada: hueso apagado
   const GOLD = ['f', 'g', 'h', 'i'];
   const CRYS = ['p', 'q', 'r', '8'];
   const LEAD = ['1', '2', '3', '5'];
@@ -787,11 +789,11 @@ OM.ART_INIT = OM.ART_INIT || [];
       const [lx, ly, lz] = toLocal(nx, ny, nz, ax, ay);
       let ramp = base, isW = false, isN = false;
       if (num === 0) {
-        ramp = WHITE; isW = true;
+        ramp = CUE_W; isW = true;
         if (Math.abs(lz) > 0.93 || Math.abs(lx) > 0.95) { ramp = ['9', 'a', 'b', 'c']; isW = false; } // puntos rojos
       } else {
         if (Math.abs(lz) > 0.78) { ramp = num === 8 ? ['9', 'a', 'b', 'c'] : WHITE; isN = true; }
-        else if (stripe && Math.abs(ly) > 0.5) { ramp = WHITE; isW = true; }
+        else if (stripe && Math.abs(ly) > 0.84) { ramp = STRIPE_W; isW = true; } // franja ancha: blanco solo en casquetes
       }
       // grabados que cambian materiales
       if (kind === 'oro' && (isW || isN)) ramp = isN ? ['g', 'h', 'i', '8'] : GOLD;

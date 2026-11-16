@@ -48,7 +48,7 @@ function sheet(t) {
   F.draw(ctx, 'outline', 262, 104, { color: 'i', outline: 'a' });
 
   // ---------------- LOGO
-  U.logo(ctx, 484, 8, t);
+  U.logo(ctx, 484, 2, t);
 
   // ---------------- PANELES
   const ps = ['dark', 'inset', 'blood', 'gold', 'tooltip'];
@@ -70,30 +70,28 @@ function sheet(t) {
   U.button(ctx, 248, 264, 76, 28, 'REROLL $5', 'idle', 'green');
 
   // ---------------- VALUE BOXES + BARRAS
-  U.panel(ctx, 330, 126, 306, 70, 'dark');
-  F.draw(ctx, 'TIRO DOBLE', 340, 133, { color: '7', shadow: '0' });
-  F.draw(ctx, 'nv.2', 404, 133, { color: '6' });
-  U.valueBox(ctx, 340, 145, 64, 22, 120, 'chips');
-  F.draw(ctx, 'x', 412, 149, { size: 2, color: 'c', outline: '0' });
-  U.valueBox(ctx, 424, 145, 64, 22, 8, 'mult');
-  U.valueBox(ctx, 496, 145, 132, 22, '12.480', 'score');
-  U.valueBox(ctx, 340, 172, 40, 16, '$12', 'money');
-  U.bar(ctx, 386, 175, 110, 9, 0.72, 'power');
-  U.bar(ctx, 502, 175, 60, 9, 0.45, 'q');
-  U.bar(ctx, 568, 175, 60, 9, 0.85, 'c');
+  U.panel(ctx, 330, 146, 306, 56, 'dark');
+  U.valueBox(ctx, 338, 153, 64, 22, 120, 'chips');
+  F.draw(ctx, 'x', 410, 157, { size: 2, color: 'c', outline: '0' });
+  U.valueBox(ctx, 422, 153, 64, 22, 8, 'mult');
+  U.valueBox(ctx, 494, 153, 134, 22, '12.480', 'score');
+  U.valueBox(ctx, 338, 180, 40, 16, '$12', 'money');
+  U.bar(ctx, 384, 183, 112, 9, 0.72, 'power');
+  U.bar(ctx, 502, 183, 60, 9, 0.45, 'q');
+  U.bar(ctx, 568, 183, 60, 9, 0.85, 'c');
 
   // ---------------- ICONOS
-  U.panel(ctx, 330, 200, 306, 50, 'inset');
+  U.panel(ctx, 330, 206, 306, 46, 'inset');
   const names = U.iconNames();
-  names.forEach((n, i) => U.icon(ctx, n, 336 + (i % 20) * 15, 206 + Math.floor(i / 20) * 16));
+  names.forEach((n, i) => U.icon(ctx, n, 336 + (i % 20) * 15, 209 + Math.floor(i / 20) * 16));
   // cursores
-  U.cursor(ctx, 336, 228, 'normal');
-  U.cursor(ctx, 362, 234, 'aim');
-  U.cursor(ctx, 382, 228, 'grab');
-  F.draw(ctx, 'iconos 12x12 · cursores', 400, 233, { color: '6' });
+  U.cursor(ctx, 336, 230, 'normal');
+  U.cursor(ctx, 362, 236, 'aim');
+  U.cursor(ctx, 382, 230, 'grab');
+  F.draw(ctx, 'iconos 12x12 · cursores', 400, 235, { color: '6' });
 
   // ---------------- PARTÍCULAS Y POPTEXTS (congelados)
-  U.panel(ctx, 330, 254, 306, 102, 'blood');
+  U.panel(ctx, 330, 255, 306, 101, 'blood');
   U.panel(ctx, 4, 296, 320, 60, 'gold');
   F.draw(ctx, 'RECOMPENSA', 164, 302, { align: 'center', size: 2, color: 'h', outline: '0', shadow: '0' });
   F.draw(ctx, '{h}$4{/} mesa + {h}$2{/} interés', 164, 322, { align: 'center', color: '7', shadow: '0' });
@@ -112,7 +110,7 @@ function seedFx() {
 }
 
 const lbls = ['spark', 'dust', 'blood', 'gold', 'smoke', 'ember', 'shard', 'pocket', 'explos.'];
-function labels() { lbls.forEach((l, i) => F.draw(ctx, l, 352 + i * 30, 262, { align: 'center', color: '6' })); }
+function labels() { lbls.forEach((l, i) => F.draw(ctx, l, 352 + i * 30, 264 + (i & 1) * 9, { align: 'center', color: i & 1 ? '6' : '7', shadow: '0' })); }
 
 seedFx();
 if (anim) {

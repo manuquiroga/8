@@ -73,6 +73,7 @@ OM.SCENES = OM.SCENES || {};
   }
 
   OM.SCENES.table = {
+    drawsFX: true,
     enter() {
       const R = OM.R;
       const M = OM.Run.mods(R);

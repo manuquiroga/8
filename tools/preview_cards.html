@@ -40,11 +40,11 @@
     bg();
     if (page === 1) {
       OM.JOKERS.forEach((j, i) => {
-        const x = 12 + (i % 10) * 62, y = 8 + Math.floor(i / 10) * 72;
+        const x = 8 + (i % 11) * 57, y = 6 + Math.floor(i / 11) * 70;
         OM.CARDS.drawJoker(ctx, j, x, y, { t, wobble: true });
-        label(j.id, x - 4, y + 64);
+        label(j.id.slice(0, 11), x - 2, y + 62);
       });
-      const y = 226;
+      const y = 222;
       OM.CARDS.drawBack(ctx, 12, y, 'joker', { t });
       OM.CARDS.drawBack(ctx, 66, y + 7, 'item', { t });
       ['arcano', 'luna', 'grabado', 'maldito'].forEach((k, i) => { OM.CARDS.drawPack(ctx, k, 112 + i * 52, y, { t }); label(k, 112 + i * 52, y + 64); });

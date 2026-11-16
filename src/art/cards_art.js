@@ -635,36 +635,46 @@ OM.ART_INIT = OM.ART_INIT || [];
     const { c, ctx } = cv(40, 54);
     const g = PX.painter(ctx, 40, 54);
     const h = H(g);
-    // cuerpo del sobre (con bordes dentados arriba y abajo)
-    const body = (x, y) => x >= 2 && x < 38 && y >= 4 && y < 50;
-    const crimpT = (x, y) => x >= 2 && x < 38 && y >= 1 && y < 5 && !(y < 2 && (Math.floor(x) % 3 === 0));
-    const crimpB = (x, y) => x >= 2 && x < 38 && y >= 49 && y < 53 && !(y >= 52 && (Math.floor(x) % 3 === 0));
-    h.ol(U(body, crimpT, crimpB), '0');
-    // dentado: líneas verticales
-    for (let x = 2; x < 38; x++) for (let y = 1; y < 5; y++) if (crimpT(x + 0.5, y + 0.5)) g.p(x, y, x % 3 === 0 ? pk.ramp[1] : pk.ramp[2]);
-    for (let x = 2; x < 38; x++) for (let y = 49; y < 53; y++) if (crimpB(x + 0.5, y + 0.5)) g.p(x, y, x % 3 === 0 ? pk.ramp[0] : pk.ramp[1]);
-    g.rect(2, 5, 36, 1, '0'); g.rect(2, 48, 36, 1, '0');
-    // cuerpo con gradiente lateral (aspecto de papel metalizado)
-    for (let y = 6; y < 48; y++) for (let x = 2; x < 38; x++) {
-      const u = (x - 2) / 35;
-      let i = u < 0.1 ? 2 : u < 0.22 ? 3 : u < 0.6 ? 2 : u < 0.85 ? 1 : 0;
-      if (u > 0.22 && u < 0.3 && (x + y) % 2) i = 2;
-      if (u > 0.55 && u < 0.62 && (x + y) % 2) i = 1;
-      g.p(x, y, pk.body[i]);
+    const B = pk.body; // oscuro -> claro
+    // silueta: cuerpo + dentado (zigzag) arriba y abajo
+    const zz = (x) => (Math.floor(x) % 2 === 0 ? 1 : 0);
+    const shape = (x, y) => x >= 1 && x < 39 && y >= 1 + zz(x) && y < 53 - zz(x);
+    h.ol(shape, '0');
+    for (let y = 0; y < 54; y++) for (let x = 0; x < 40; x++) {
+      if (!shape(x + 0.5, y + 0.5)) continue;
+      // gradiente metalizado por columnas + brillo diagonal
+      const u = (x - 1) / 37;
+      let i = u < 0.08 ? 2 : u < 0.2 ? 3 : u < 0.55 ? 2 : u < 0.85 ? 1 : 0;
+      const d = (x + y * 0.5) % 40;
+      if (d > 30 && d < 33) i = Math.min(3, i + 1);
+      if (u > 0.2 && u < 0.26 && (x + y) % 2) i = 2;
+      if (u > 0.5 && u < 0.58 && (x + y) % 2) i = 1;
+      g.p(x, y, B[i]);
     }
-    // banda central
-    g.rect(2, 13, 36, 1, '0'); g.rect(2, 40, 36, 1, '0');
-    for (let x = 2; x < 38; x++) { g.p(x, 14, pk.ramp[3]); g.p(x, 39, pk.ramp[0]); }
-    for (let y = 15; y < 39; y++) for (let x = 2; x < 38; x++) g.p(x, y, (x + y) % 2 ? '1' : '0');
-    // ventana del emblema
+    // franjas selladas (crimpado)
+    for (let x = 1; x < 39; x++) {
+      for (let y = 1; y < 6; y++) if (shape(x + 0.5, y + 0.5)) g.p(x, y, x % 2 ? pk.ramp[1] : pk.ramp[2]);
+      for (let y = 48; y < 53; y++) if (shape(x + 0.5, y + 0.5)) g.p(x, y, x % 2 ? pk.ramp[0] : pk.ramp[1]);
+    }
+    g.rect(1, 6, 38, 1, '0'); g.rect(1, 47, 38, 1, '0');
+    g.rect(1, 7, 38, 1, pk.ramp[3]);
+    // muesca de apertura
+    g.p(1, 9, '0'); g.p(2, 9, '0'); g.p(38, 9, '0'); g.p(37, 9, '0');
+    // ventana del emblema (arco gótico)
+    const win = U(Rc(6, 16, 28, 26), E(20, 16, 14, 6));
+    h.ol(win, '0');
+    for (let y = 0; y < 54; y++) for (let x = 0; x < 40; x++) if (win(x + 0.5, y + 0.5)) g.p(x, y, (x + y) % 2 ? '1' : '0');
+    for (let y = 10; y < 43; y++) for (let x = 5; x < 35; x++) {
+      if (!win(x + 0.5, y + 0.5)) continue;
+      if (!win(x + 0.5, y - 0.5) || !win(x - 0.5, y + 0.5)) g.p(x, y, pk.ramp[3]);
+      else if (!win(x + 0.5, y + 1.5) || !win(x + 1.5, y + 0.5)) g.p(x, y, pk.ramp[0]);
+    }
     const em = PX.get(pk.emb);
     if (em) ctx.drawImage(em.c, 8, 15);
-    // estrellas decorativas
-    h.star(6, 9, pk.ramp[2], pk.ramp[3]); h.star(33, 44, pk.ramp[2], pk.ramp[3]);
-    // brillo diagonal
-    for (let k = 0; k < 6; k++) { g.p(8 + k, 6 + k * 0, pk.ramp[3]); }
-    g.rect(29, 7, 6, 1, pk.ramp[3]); g.rect(31, 9, 4, 1, pk.ramp[2]);
-    g.rect(5, 43, 6, 1, pk.ramp[3]);
+    // pips: cuántas cartas trae (3)
+    for (let k = 0; k < 3; k++) { const x = 15 + k * 4; g.p(x, 44, pk.ramp[3]); g.p(x + 1, 44, pk.ramp[2]); g.p(x, 45, pk.ramp[2]); g.p(x + 1, 45, pk.ramp[1]); }
+    // destellos
+    h.star(5, 11, pk.ramp[2], '8'); h.star(35, 43, pk.ramp[2], '8');
     return c;
   }
 
@@ -676,21 +686,24 @@ OM.ART_INIT = OM.ART_INIT || [];
     const g = PX.painter(ctx, 48, 48);
     const h = H(g);
     const fin = !!def.final;
-    const ring = fin ? R.gold : R.iron;
-    // púas
+    const ring = fin ? R.gold : ['2', '3', '5', '6'];
+    // púas (4 grandes + 4 pequeñas)
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
-      const tip = [24 + Math.cos(a) * 23.5, 24 + Math.sin(a) * 23.5];
-      const l = [24 + Math.cos(a - 0.22) * 19, 24 + Math.sin(a - 0.22) * 19];
-      const r = [24 + Math.cos(a + 0.22) * 19, 24 + Math.sin(a + 0.22) * 19];
-      h.shade(P([l, tip, r]), fin ? R.gold : R.steel, {});
+      const big = k % 2 === 0, L = big ? 23.8 : 22, wd = big ? 0.2 : 0.16;
+      const tip = [24 + Math.cos(a) * L, 24 + Math.sin(a) * L];
+      const l = [24 + Math.cos(a - wd) * 18, 24 + Math.sin(a - wd) * 18];
+      const r = [24 + Math.cos(a + wd) * 18, 24 + Math.sin(a + wd) * 18];
+      h.shade(P([l, tip, r]), fin ? R.gold : R.steel, { bias: 0.2 });
     }
-    h.shade(C(24, 24, 20), ring, { bias: 0.2 });
-    h.fill(C(24, 24, 17), '0');
+    h.shade(C(24, 24, 20), ring, { bias: 0.25 });
+    h.fill(D(C(24, 24, 20), C(24.6, 24.6, 19.6)), fin ? 'e' : '2');
+    h.fill(C(24, 24, 17.5), '0');
+    h.fill(D(C(24, 24, 17.2), C(24, 24, 16.4)), fin ? 'v' : 'a');
     // interior radial
     for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
       const d = Math.hypot(x + 0.5 - 24, y + 0.5 - 24);
-      if (d > 16.4) continue;
+      if (d > 16.2) continue;
       let col = '1';
       if (d < 9) col = (x + y) % 2 ? (fin ? 'a' : '9') : (fin ? '9' : '2');
       else if (d < 13) col = fin ? '9' : '2';
@@ -1002,16 +1015,15 @@ OM.ART_INIT = OM.ART_INIT || [];
     // bolsa de arpillera
     const bag = U(E(15, 21, 10, 8.5), P([[10, 13], [20, 13], [24, 18], [6, 18]]));
     h.shade(bag, ['e', 'f', 'g', 'h'], { bias: 0.1 });
-    // boca de la bolsa (pliegues)
-    h.shade(P([[8, 5], [12, 8], [15, 4], [18, 8], [23, 5], [20, 11], [10, 11]]), ['9', 'e', 'f', 'g'], { bias: 0.3 });
-    h.p(15, 6, 'g'); h.p(12, 9, 'e'); h.p(18, 9, 'e');
+    // tela fruncida sobre la cuerda
+    h.shade(U(E(15, 7.5, 5.5, 3.2), E(11, 9, 2.5, 2), E(19, 9, 2.5, 2)), ['9', 'e', 'f', 'g'], { bias: 0.3 });
+    h.line(13, 6, 13, 10, 'e'); h.line(16, 5, 16, 10, 'e'); h.line(18, 7, 18, 10, 'e');
     // cuerda roja
     h.shade(Rc(9, 10, 12, 3), R.blood, {});
     h.p(10, 10, 'c'); h.p(13, 10, 'c'); h.p(19, 13, 'b'); h.p(20, 14, 'a'); h.p(20, 15, 'b');
     // signo $
     h.glyphO(12, 16, OM.CARDS._lib.F3['S$'], 'h', '9');
     h.p(13, 17, 'i'); h.p(12, 18, 'i');
-    // costuras
     h.p(7, 22, 'e'); h.p(8, 25, 'e'); h.p(22, 22, 'e'); h.p(21, 26, 'e');
     // pila de monedas
     [[27, 29], [27, 27], [27, 25]].forEach(([x, y]) => {
@@ -1082,7 +1094,7 @@ OM.ART_INIT = OM.ART_INIT || [];
     h.fill(E(16, 13, 4, 0.9), '1');
     // mecha y llama
     h.p(16, 11, '0'); h.p(16, 12, '0');
-    h.flame(16.5, 11, 3.6, 10, R.fire);
+    h.flame(16.5, 11, 4.2, 11, R.fire);
     h.p(16, 3, 'v'); h.p(15, 1, 'b');
     [[8, 3], [24, 5], [6, 12], [26, 12]].forEach(([x, y]) => h.p(x, y, 'v'));
   });
@@ -1146,7 +1158,7 @@ OM.ART_INIT = OM.ART_INIT || [];
     h.ball(22, 7, 5.5, { col: R.blue, stripe: true, num: 2 });
     h.star(16, 2, 'h', '8', 2); h.p(5, 4, 'i'); h.p(28, 13, 'i');
     // chistera invertida
-    h.shade(U(P([[8, 17], [24, 17], [22.5, 28], [9.5, 28]]), E(16, 28, 6.5, 2)), ['1', '2', '3', '4'], { bias: 0.2 });
+    h.shade(U(P([[8, 17], [24, 17], [22.5, 28], [9.5, 28]]), E(16, 28, 6.5, 2)), ['2', '3', '4', '5'], { bias: 0.2 });
     h.fill(Rc(9, 19, 14, 2), 'b'); h.fill(Rc(9, 19, 14, 1), 'c');
     h.shade(E(16, 16, 12.5, 3.4), ['1', '2', '3', '5'], { bias: 0.4 });
     h.fill(E(16, 15.8, 8, 1.9), '0');
@@ -1193,28 +1205,30 @@ OM.ART_INIT = OM.ART_INIT || [];
 
   J('carronero', (h) => {
     h.halo(16, 15, 15, '9');
-    // bola blanca bajo las garras
-    h.sphere(11, 26, 5.5, R.bone, {});
-    // cuerpo encorvado con cola
-    const body = P([[5, 9], [12, 6], [18, 8], [21, 13], [20, 19], [15, 22], [8, 22], [3, 27], [1, 24], [3, 17]]);
-    h.shade(body, ['1', '2', '3', '5'], { bias: 0.3 });
-    // plumas del ala
-    h.line(6, 12, 14, 19, '4'); h.line(8, 10, 17, 17, '4'); h.line(5, 15, 10, 20, '3');
-    h.p(14, 20, '5'); h.p(17, 18, '5'); h.p(10, 21, '5');
-    // gorguera blanca
-    h.shade(U(E(19, 8.5, 4.5, 3.2), C(16, 8, 2.6)), R.bone, { bias: 0.2 });
-    // cuello pelado y cabeza grande
-    h.shade(Cap(20, 7, 23, 4, 1.8), ['a', 'b', 'c', 'd'], { bias: 0.3 });
-    h.shade(E(24, 4.5, 3.6, 3.2), ['a', 'b', 'c', 'd'], { bias: 0.5 });
-    // pico ganchudo
-    h.shade(P([[26.5, 2.5], [30, 3.5], [31, 6], [30, 8], [28.5, 6.5], [26.5, 6]]), ['5', '6', '7', '8'], {});
-    h.p(30, 7, '0'); h.p(29, 7, '5');
-    h.p(24, 3, '0'); h.p(23, 3, 'h'); h.p(24, 2, '9');
-    // garras doradas
-    [[8, 21], [10, 21], [13, 21], [15, 21]].forEach(([x, y]) => { h.p(x, y, 'h'); h.p(x, y + 1, 'g'); });
-    // monedas del carroñero
-    h.coin(23, 21, 3); h.coin(27, 26, 3); h.coin(21, 28, 2.5);
-    h.star(29, 15, 'h', '8');
+    // tronera con la blanca medio hundida (scratch)
+    h.fill(E(16, 28, 12, 3.6), 'g'); h.ol(E(16, 28, 12, 3.6));
+    h.fill(E(16, 28.3, 10.5, 2.6), '0');
+    h.sphere(16, 25, 5.5, R.bone, {});
+    h.fill(I(E(16, 29.5, 12, 2.4), (x, y) => y > 28.5), 'g');
+    h.fill(I(E(16, 29.5, 12, 2.4), (x, y) => y > 30), 'e');
+    // rata carroñera sentada sobre la bola
+    h.shade(U(Cap(9, 18, 4, 21, 1.2, 0.9), Cap(4, 21, 2, 26, 0.9, 0.6)), ['a', 'b', 'c', 'd'], { bias: 0.3 });
+    h.shade(E(13, 15, 6.5, 5), R.lilac, { bias: 0.3 });
+    h.shade(U(E(19.5, 11.5, 4.5, 3.6), P([[21, 9], [27, 12], [21, 14.5]])), R.lilac, { bias: 0.4 });
+    // oreja
+    h.shade(C(17, 7.5, 2.6), R.lilac, {}); h.fill(C(17.2, 7.8, 1.3), 'c');
+    // ojo, nariz, bigotes, dientes
+    h.p(20, 10, '0'); h.p(21, 10, 'c'); h.p(20, 9, '8');
+    h.p(27, 12, 'u'); h.p(26, 11, 'u');
+    h.line(24, 10, 29, 8, '6'); h.line(24, 13, 29, 15, '6');
+    h.p(24, 14, '8');
+    // patitas con moneda
+    h.coin(23, 17.5, 3);
+    h.shade(E(19.5, 17, 1.6, 1.2), ['b', 'c', 'd', 'd'], {});
+    h.p(12, 19, 'c'); h.p(15, 19, 'c');
+    // botín
+    h.coin(4, 12, 2.6); h.coin(28, 24, 2.6);
+    h.star(28, 4, 'h', '8', 1);
   });
   J('martillo', (h) => {
     h.halo(19, 12, 14, '4');
@@ -1419,36 +1433,33 @@ OM.ART_INIT = OM.ART_INIT || [];
   });
 
   J('ojo_abismo', (h) => {
-    // tentáculos
-    [[[16, 16], [5, 27], [1, 23]], [[16, 16], [27, 28], [31, 24]], [[16, 16], [4, 3], [1, 7]], [[16, 16], [28, 4], [31, 8]]].forEach((tp) => {
-      h.shade(U(Cap(tp[0][0], tp[0][1], tp[1][0], tp[1][1], 3, 1.6), Cap(tp[1][0], tp[1][1], tp[2][0], tp[2][1], 1.6, 0.5)), R.mag, { bias: 0.2 });
-    });
-    [[8, 24], [6, 26], [24, 25], [26, 27], [8, 7], [24, 7]].forEach(([x, y]) => h.p(x, y, 'u'));
+    // corona de púas abisales (estrella sólida)
+    h.halo(16, 16, 15.5, 's', '2');
+    const star = [];
+    for (let k = 0; k < 20; k++) { const a = (k / 20) * Math.PI * 2 - Math.PI / 2, L = k % 2 ? 10.5 : (k % 4 ? 13.5 : 15.5); star.push([16 + Math.cos(a) * L, 16 + Math.sin(a) * L]); }
+    h.shade(P(star), ['2', 's', 't', 'u'], { bias: 0.3 });
+    h.shade(P(star.map(([x, y]) => [16 + (x - 16) * 0.78, 16 + (y - 16) * 0.78])), ['s', 't', 'u', '8'], { ol: false, bias: 0.4 });
     // párpados
-    const lid = P([[1, 16], [7, 8], [16, 5], [25, 8], [31, 16], [25, 24], [16, 27], [7, 24]]);
+    const lid = P([[3, 16], [8, 9.5], [16, 7.5], [24, 9.5], [29, 16], [24, 22.5], [16, 24.5], [8, 22.5]]);
     h.shade(lid, R.violet, { bias: 0.2 });
-    const scl = E(16, 16, 11, 7.5);
+    const scl = E(16, 16, 10.5, 6.6);
     h.shade(scl, ['6', '7', '7', '8'], { ol: '0', bias: 0.3 });
     // venas
     h.line(6, 15, 9, 14, 'b'); h.line(6, 17, 8, 18, 'b'); h.line(26, 15, 23, 13, 'b'); h.line(25, 18, 23, 19, 'b'); h.p(7, 13, 'a'); h.p(25, 20, 'a');
     // iris holo concéntrico
-    const cols = ['h', 'm', 'r', 'q', 't', 'u', 'c'];
+    const cols = ['u', 't', 'q', 'r', 'm', 'h', 'v'];
     for (let y = 8; y < 25; y++) for (let x = 8; x < 25; x++) {
       const d = Math.hypot(x + 0.5 - 16, y + 0.5 - 16);
-      if (d > 6.8) continue;
-      const a = Math.atan2(y + 0.5 - 16, x + 0.5 - 16);
-      const k = Math.floor(d * 1.1 + a * 1.2 + 10) % cols.length;
-      h.p(x, y, cols[k]);
+      if (d > 6.2 || !scl(x + 0.5, y + 0.5)) continue;
+      h.p(x, y, cols[Math.floor(d * 1.05) % cols.length]);
     }
-    h.ol(C(16, 16, 6.8), '0');
-    h.fill(E(16, 16, 1.4, 4.6), '0');
-    h.fill(E(16, 16, 0.6, 3.2), 's');
-    h.fill(I(scl, (x, y) => y < 10.5), '6');
-    h.p(13, 12, '8'); h.p(12, 13, '8'); h.p(19, 20, '7');
+    h.ol(I(C(16, 16, 6.2), scl), '0');
+    h.fill(E(16, 16, 1.4, 4.4), '0');
+    h.fill(D(I(scl, (x, y) => y < 11), C(16, 16, 6.2)), '6');
+    h.p(13, 12, '8'); h.p(12, 13, '8'); h.p(14, 12, '8'); h.p(19, 20, '7');
     // pestañas
-    [[9, 7, 8, 4], [13, 5, 13, 2], [19, 5, 19, 2], [23, 7, 24, 4]].forEach(([a, b, c, d]) => h.line(a, b, c, d, '0'));
+    [[10, 9, 9, 7], [13, 8, 13, 6], [19, 8, 19, 6], [22, 9, 23, 7]].forEach(([a, b, c, d]) => h.line(a, b, c, d, '0'));
   });
-
   // ======================================================================
   // CONSUMIBLES 24x24
   // ======================================================================
@@ -1469,17 +1480,18 @@ OM.ART_INIT = OM.ART_INIT || [];
     h.sphere(12, 5, 4.5, R.bone, {});
     h.star(19, 3, 'i', '8');
     h.p(4, 3, '8');
-    const hand = U(Rc(7, 14, 10, 6), Rc(9, 19, 6, 5),
-      Cap(8, 15, 7, 10, 1.1), Cap(10.5, 14, 10.5, 9, 1.1), Cap(13.5, 14, 14, 9, 1.1), Cap(16, 15, 17.5, 11, 1.1), Cap(7, 18, 3, 14, 1.2));
-    h.shade(hand, R.bone, { bias: 0.3 });
+    // dedos (falanges separadas)
+    const fing = [[7, 15, 6, 10], [10, 14, 9.5, 9], [13.5, 14, 14, 9], [16.5, 15, 18, 10.5], [6.5, 18, 3, 14.5]];
+    fing.forEach(([x0, y0, x1, y1]) => h.shade(Cap(x0, y0, x1, y1, 1.15, 0.9), R.bone, { bias: 0.4 }));
+    // palma y muñeca
+    h.shade(U(P([[6, 15], [18, 15], [16, 20], [8, 20]]), Rc(9, 20, 6, 4)), R.bone, { bias: 0.3 });
     // articulaciones
-    [[7, 12], [10, 11], [14, 11], [17, 13], [5, 16]].forEach(([x, y]) => h.p(x, y, '5'));
-    h.fill(Rc(8, 16, 8, 1), '6'); h.p(10, 18, '5'); h.p(13, 18, '5');
-    h.line(10, 20, 10, 23, '5'); h.line(13, 20, 13, 23, '5');
+    fing.forEach(([x0, y0, x1, y1]) => h.p(Math.round((x0 + x1) / 2), Math.round((y0 + y1) / 2), '5'));
+    h.p(9, 17, '5'); h.p(12, 17, '5'); h.p(15, 17, '5');
+    h.line(11, 20, 11, 23, '5'); h.line(13, 20, 13, 23, '5');
     // destellos de colocar
-    h.dash(4, 7, 4, 10, '7', 1, 1); h.dash(20, 7, 20, 10, '7', 1, 1);
+    h.dash(3, 6, 3, 9, 'r', 1, 1); h.dash(21, 6, 21, 9, 'r', 1, 1);
   });
-
   IT('rueda', (h) => {
     h.shade(D(C(12, 12, 10.5), C(12, 12, 7.5)), R.gold, { bias: 0.3 });
     for (let k = 0; k < 8; k++) {
@@ -1650,18 +1662,19 @@ OM.ART_INIT = OM.ART_INIT || [];
 
   B('niebla', (h) => {
     // figura encapuchada
-    h.shade(U(E(16, 15, 9, 11), P([[7, 18], [25, 18], [28, 31], [4, 31]])), ['0', '1', '2', '3'], { bias: 0.3 });
-    h.fill(E(16, 13, 5.5, 6), '0');
-    h.p(13, 13, 'r'); h.p(14, 13, '8'); h.p(18, 13, '8'); h.p(19, 13, 'r');
-    h.p(13, 14, 'q'); h.p(19, 14, 'q');
-    // bancos de niebla (capas suaves)
-    const back = U(E(4, 20, 7, 2.6), E(28, 18, 6, 2.4), E(4, 7, 5, 1.5), E(28, 10, 5, 1.5));
-    h.shade(back, ['3', '4', '4', '5'], { ol: false, bias: 0.2 });
-    const front = U(E(9, 25, 9, 3.2), E(22, 24, 10, 3.4), E(16, 29, 14, 2.6));
-    h.shade(front, ['4', '5', '6', '7'], { ol: false, bias: 0.3 });
-    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
-      if (front(x + 0.5, y + 0.5) && !front(x + 0.5, y - 0.5) && (x % 3 === 0)) h.p(x, y - 1, '5');
-    }
+    h.shade(U(E(16, 14, 9, 11), P([[7, 17], [25, 17], [28, 31], [4, 31]])), ['0', '1', '2', '3'], { bias: 0.3 });
+    h.fill(E(16, 12.5, 5.5, 6), '0');
+    h.p(13, 12, 'r'); h.p(14, 12, '8'); h.p(18, 12, '8'); h.p(19, 12, 'r');
+    h.p(13, 13, 'q'); h.p(19, 13, 'q');
+    // niebla lateral (fondo)
+    const back = U(C(3, 12, 3), C(7, 13, 2.5), C(28, 9, 3), C(25, 10, 2.2), C(2, 20, 2.5), C(30, 19, 3));
+    h.shade(back, ['3', '4', '4', '5'], { ol: false, bias: 0.3 });
+    // niebla delantera en cúmulos
+    const front = U(C(3, 26, 4), C(9, 23.5, 4.5), C(16, 25, 5), C(23, 23, 4.5), C(29, 25, 4), Rc(0, 26, 32, 6));
+    h.shade(front, ['4', '5', '6', '7'], { ol: false, bias: 0.4, reach: 6 });
+    // jirones
+    for (let x = 0; x < 32; x++) { if ((x * 7) % 5 < 2) h.p(x, 31, '5'); }
+    [[11, 19], [21, 18], [5, 17], [27, 16]].forEach(([x, y]) => { h.p(x, y, '5'); h.p(x + 1, y, '6'); h.p(x + 2, y, '5'); });
   });
   B('gloton', (h) => {
     const face = U(E(16, 17, 14, 13), E(16, 26, 11, 5));
@@ -1768,21 +1781,22 @@ OM.ART_INIT = OM.ART_INIT || [];
   B('coleccionista', (h) => {
     const jar = U(Rc(6, 8, 20, 18), E(16, 26, 10, 4));
     h.shade(jar, ['2', '3', '4', '6'], { bias: 0.1 });
-    // bolas rayadas dentro
-    h.ball(11, 24, 4, { col: R.blue, stripe: true });
-    h.ball(20.5, 24, 4, { col: R.ember, stripe: true });
-    h.ball(15.5, 16.5, 4, { col: R.toxic, stripe: true });
+    // bolas rayadas coleccionadas
+    h.ball(11, 14, 4, { col: R.blue, stripe: true });
+    h.ball(21, 14.5, 4, { col: R.ember, stripe: true });
+    h.ball(16, 21, 4.3, { col: R.toxic, stripe: true });
     // brillo del cristal
-    h.fill(Rc(7, 10, 1, 14), '6'); h.fill(Rc(8, 11, 1, 4), '8');
+    h.fill(Rc(7, 10, 1, 15), '6'); h.fill(Rc(8, 11, 1, 4), '8');
     h.fill(Rc(24, 10, 1, 14), '4');
     // tapa
     h.shade(Rc(5, 4, 22, 5), R.gold, { bias: 0.3 });
     h.fill(Rc(5, 6, 22, 1), 'e');
     // etiqueta con ojo
-    h.shade(Rc(10, 9, 12, 5), R.bone, {});
-    h.fill(E(16, 11.5, 3, 1.5), '0'); h.fill(C(16, 11.5, 1), 'c'); h.p(16, 11, '8');
+    h.shade(Rc(10, 25, 12, 5), R.bone, {});
+    h.fill(E(16, 27.5, 3, 1.4), '0'); h.p(16, 27, 'c'); h.p(17, 27, 'c'); h.p(16, 28, 'b');
+    // mano del coleccionista sobre la tapa
+    h.shade(U(Cap(20, 3, 28, 1, 1), Cap(22, 3, 24, 6, 0.8), Cap(25, 3, 27, 6, 0.8)), R.bone, {});
   });
-
   B('boca', (h) => {
     h.halo(16, 16, 16, 'a', '9');
     h.shade(E(16, 16, 15, 12), R.red, { bias: 0.3 });
@@ -1887,10 +1901,12 @@ OM.ART_INIT = OM.ART_INIT || [];
     h.shade(Cap(17, 18, 22, 23, 1), R.woodD, {}); h.shade(Cap(15, 16, 17, 18, 1.4), R.steel, {});
   });
   EM('maldito', (h) => {
-    h.flame(6, 20, 3.5, 13, R.ember); h.flame(18, 20, 3.5, 13, R.ember); h.flame(12, 17, 4, 15, R.ember);
-    horns(h, 12, 10, 4, 8, R.bone);
-    h.sphere(12, 15, 7.5, ['1', '2', '3', '5'], { spec: '7', rimC: 's' });
-    h.fill(C(11.5, 13.5, 3.2), '7');
-    h.rows(10, 11, ['.b.', 'b.b', '.b.', 'b.b', '.b.'], {});
+    h.halo(12, 14, 11.5, 'b', 'a');
+    [[3, 4], [21, 3], [2, 20], [22, 19]].forEach(([x, y], i) => h.p(x, y, i % 2 ? 'v' : 'd'));
+    horns(h, 12, 8, 4.5, 8, R.bone);
+    h.sphere(12, 15, 8, ['1', '2', '3', '5'], { spec: '7', rimC: 'a' });
+    h.fill(C(11.5, 14, 3.9), '7'); h.fill(D(C(11.5, 14, 3.9), C(10.9, 13.4, 3.7)), '6'); h.ol(C(11.5, 14, 3.9), '1');
+    h.glyph(10, 12, OM.CARDS._lib.F3['8'], 'b');
+    h.p(7, 10, '8');
   });
 })();

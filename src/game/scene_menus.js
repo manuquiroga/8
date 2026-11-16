@@ -29,13 +29,13 @@ OM.SCENES = OM.SCENES || {};
     draw(ctx, t) {
       const G = OM.G, M = OM.META;
       OM.UI.drawBackground(ctx, t, 'title');
-      OM.UI.logo(ctx, CX, 52, t);
-      OM.FONT.draw(ctx, 'un roguelite de billar en el bar del infierno', CX, 168, { color: '6', align: 'center', shadow: '0' });
+      OM.UI.logo(ctx, CX, 20, t);
+      OM.FONT.draw(ctx, 'un roguelite de billar en el bar del infierno', CX, 170, { color: '6', align: 'center', shadow: '0' });
       const bw = 170, bx = CX - bw / 2;
-      if (G.button(bx, 190, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
-      if (G.button(bx, 214, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
-      if (G.button(bx, 238, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
-      if (G.button(bx + 88, 238, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
+      if (G.button(bx, 196, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
+      if (G.button(bx, 224, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
+      if (G.button(bx, 248, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
+      if (G.button(bx + 88, 248, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
       const seen = Object.keys(M.seen).length;
       const stats = 'Partidas ' + M.runs + '   ·   Victorias ' + M.wins + '   ·   Mejor círculo ' + (M.best ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VI+'][Math.min(6, M.best)] : '-') + '   ·   Récord de tiro ' + OM.fmt(M.bestShot) + '   ·   Comodines ' + seen + '/' + OM.JOKERS.length;
       OM.FONT.draw(ctx, stats, CX, 300, { color: '5', align: 'center' });
@@ -200,7 +200,7 @@ OM.SCENES = OM.SCENES || {};
         this.shop = OM.Run.makeShop(R); this.shop.packs = keepPacks; this.sel = null;
         OM.sfx('reroll');
       }
-      OM.FONT.draw(ctx, 'Interés: {h}$1{/} por cada {h}$5{/} (máx. {h}$' + R.interestCap + '{/})', AREA.x + AREA.w - 12, by + 9, { color: '6', align: 'right' });
+      OM.FONT.draw(ctx, 'Interés: {h}$1{/} por cada {h}$5{/} (máx. {h}$' + R.interestCap + '{/})', AREA.x + AREA.w / 2, by - 16, { color: '6', align: 'center' });
       // frase del barquero
       OM.FONT.draw(ctx, QUOTES[Math.floor(t / 6) % QUOTES.length], AREA.x + AREA.w / 2, AREA.y + 150, { color: '5', align: 'center' });
       // overlays
@@ -222,12 +222,12 @@ OM.SCENES = OM.SCENES || {};
       const R = OM.R, G = OM.G, P = this.pack;
       P.t += 1 / 60;
       ctx.globalAlpha = 0.8; ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 0, OM.W, OM.H); ctx.globalAlpha = 1;
-      OM.FONT.draw(ctx, PACKS[P.kind].name.toUpperCase(), CX, 96, { color: 'h', size: 2, align: 'center', shadow: '0', wave: 1, t });
-      OM.FONT.draw(ctx, 'Elige una carta', CX, 120, { color: '7', align: 'center' });
+      OM.FONT.draw(ctx, PACKS[P.kind].name.toUpperCase(), CX, 66, { color: 'h', size: 2, align: 'center', shadow: '0', wave: 1, t });
+      OM.FONT.draw(ctx, 'Elige una carta', CX, 88, { color: '7', align: 'center' });
       P.opts.forEach((op, i) => {
         const big = op.type === 'joker';
         const w = big ? L.cardW : L.smallCardW, h = big ? L.cardH : L.smallCardH;
-        const x = CX - 100 + i * 100 - w / 2, y = 150;
+        const x = CX - 100 + i * 100 - w / 2, y = 150 + (big ? 0 : 8);
         const appear = Math.min(1, Math.max(0, (P.t - i * 0.15) * 4));
         if (appear <= 0) return;
         if (appear < 1) { OM.CARDS.drawBack(ctx, x, y, big ? 'joker' : 'item', { t }); return; }
@@ -320,6 +320,7 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- VICTORIA ----------------
   OM.SCENES.victory = {
+    drawsFX: true,
     enter() { OM.META.wins++; OM.saveMeta(); OM.music('menu'); OM.sfx('win_table'); this.t0 = OM.time; },
     draw(ctx, t) {
       const R = OM.R, G = OM.G;

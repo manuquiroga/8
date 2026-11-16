@@ -141,12 +141,13 @@ window.OM = window.OM || {};
     }
     G.tip = null; G.cursor = 'normal'; IN.consumed = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 0, W, H);
     try {
       if (OM.scene) {
         OM.scene.update && OM.scene.update(dt, t);
         OM.scene.draw && OM.scene.draw(ctx, t);
+        if (!OM.scene.drawsFX) OM.FX.draw(ctx);
       }
       OM.FX.update(dt);
       G.drawTooltip();
