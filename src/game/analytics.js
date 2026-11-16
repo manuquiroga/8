@@ -114,7 +114,7 @@ OM.Analytics = (function () {
     R.tableList = Object.values(R.tables).map((t) => {
       const o = { key: t.key, circle: t.circle, kind: t.kind, plays: t.plays, pass: pct(t.won, t.plays), ratio: avg(t.ratio), shotsUsed: avg(t.shotsUsed), jokers: avg(t.jokers), flag: null };
       if (t.plays >= TH.minTables && o.pass < TH.hard) o.flag = 'DIFÍCIL';
-      else if (t.plays >= TH.minTables && o.pass >= TH.easy && o.ratio >= TH.easyRatio) o.flag = 'FÁCIL';
+      else if (t.plays >= TH.minTables && t.circle >= 2 && o.pass >= TH.easy && o.ratio >= TH.easyRatio) o.flag = 'FÁCIL'; // C1-C2 son fáciles a propósito
       return o;
     }).sort((a, b) => (a.key.startsWith('∞') - b.key.startsWith('∞')) || a.circle - b.circle || ['menor', 'mayor', 'jefe'].indexOf(a.kind) - ['menor', 'mayor', 'jefe'].indexOf(b.kind));
     R.bossList = Object.values(R.bosses).map((b) => {

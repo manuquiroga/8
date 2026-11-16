@@ -92,8 +92,11 @@ OM.JOKERS = [
   { id: 'calavera_dorada', name: 'Calavera Dorada', rarity: 'epico', desc: 'x2.5 Mult. Pierdes $1 en cada tiro que emboque.',
     onShot(S) { if (S.balls.length) S.add({ xmult: 2.5 }, this); S.add({ money: -1 }, this); } },
   { id: 'espejo_roto', name: 'Espejo Roto', rarity: 'epico', desc: 'Copia la habilidad del comodín a su DERECHA.', copy: true },
-  { id: 'parca', name: 'La Parca', rarity: 'epico', desc: 'x3 Mult si quedan 5 bolas o menos en la mesa.',
-    onShot(S) { if (S.balls.length && S.ballsLeft <= 5) S.add({ xmult: 3 }, this); } },
+  { id: 'parca', name: 'La Parca', rarity: 'epico', desc: 'x0.2 Mult por cada bola embocada en esta mesa (incluido el tiro). (Actual: {v} bolas)',
+    state: () => ({ v: 0 }),
+    onTableStart(R, J) { J.st.v = 0; },
+    onShot(S, J) { const n = J.st.v + S.balls.length; if (S.balls.length && n) S.add({ xmult: 1 + 0.2 * n }, J); },
+    onAfter(S, J) { J.st.v += S.balls ? S.balls.length : 0; } },
   { id: 'cadena', name: 'Cadena Infernal', rarity: 'epico', desc: 'x0.5 Mult extra por cada nivel de RACHA.', unlock: 'racha5',
     onShot(S) { if (S.balls.length && S.streak) S.add({ xmult: 1 + 0.5 * S.streak }, this); } },
 
@@ -138,10 +141,11 @@ OM.ENGRAVINGS = {
 
 // Tipos de tiro (como las "manos" de póker). Mejorables con Lunas Negras.
 OM.SHOT_TYPES = {
-  simple:   { name: 'Simple',   chips: 20,  mult: 1, lvlChips: 10, lvlMult: 1 },
-  doblete:  { name: 'Doblete',  chips: 40,  mult: 2, lvlChips: 15, lvlMult: 1 },
-  triplete: { name: 'Triplete', chips: 70,  mult: 3, lvlChips: 20, lvlMult: 2 },
-  masacre:  { name: 'Masacre',  chips: 120, mult: 5, lvlChips: 30, lvlMult: 3 },
+  // v1.1b: Simple más fuerte (el bot mostró que el desgaste temprano mataba las partidas)
+  simple:   { name: 'Simple',   chips: 30,  mult: 2, lvlChips: 10, lvlMult: 1 },
+  doblete:  { name: 'Doblete',  chips: 50,  mult: 3, lvlChips: 15, lvlMult: 1 },
+  triplete: { name: 'Triplete', chips: 80,  mult: 4, lvlChips: 20, lvlMult: 2 },
+  masacre:  { name: 'Masacre',  chips: 120, mult: 6, lvlChips: 30, lvlMult: 3 },
   limpia:   { name: 'Mesa Limpia', chips: 200, mult: 8, lvlChips: 40, lvlMult: 4 },
 };
 
@@ -186,7 +190,7 @@ OM.BOSSES = [
   { id: 'gloton', name: 'El Glotón', desc: 'La primera bola de cada tiro no da Fichas.' },
   { id: 'sanguijuela', name: 'La Sanguijuela', desc: 'Pierdes $1 por cada tiro.' },
   { id: 'pendulo', name: 'El Péndulo', desc: 'La mesa se inclina y oscila.' },
-  { id: 'verdugo', name: 'El Verdugo', desc: 'Meter la blanca te cuesta 2 tiros.' },
+  { id: 'verdugo', name: 'El Verdugo', desc: 'Fallar o meter la blanca te cuesta 1 tiro extra.' },
   { id: 'cienaga', name: 'La Ciénaga', desc: 'El paño frena el doble.' },
   { id: 'escarcha', name: 'La Escarcha', desc: 'El paño apenas frena. Todo resbala.' },
   { id: 'coleccionista', name: 'El Coleccionista', desc: 'Solo puntúan las bolas RAYADAS.' },
@@ -198,12 +202,12 @@ OM.BOSSES = [
 
 // Círculos (actos). 3 mesas cada uno: Menor, Mayor, Jefe.
 OM.CIRCLES = [
-  { id: 'limbo',    name: 'I · Limbo',     base: 200,   theme: 'limbo' },
-  { id: 'lujuria',  name: 'II · Lujuria',  base: 550,   theme: 'lujuria' },
-  { id: 'gula',     name: 'III · Gula',    base: 1500,  theme: 'gula' },
-  { id: 'avaricia', name: 'IV · Avaricia', base: 4500,  theme: 'avaricia' },
-  { id: 'ira',      name: 'V · Ira',       base: 10000, theme: 'ira' },
-  { id: 'abismo',   name: 'VI · Abismo',   base: 22000, theme: 'abismo' },
+  { id: 'limbo',    name: 'I · Limbo',     base: 150,   theme: 'limbo' },
+  { id: 'lujuria',  name: 'II · Lujuria',  base: 500,   theme: 'lujuria' },
+  { id: 'gula',     name: 'III · Gula',    base: 1200,  theme: 'gula' },
+  { id: 'avaricia', name: 'IV · Avaricia', base: 2600,  theme: 'avaricia' },
+  { id: 'ira',      name: 'V · Ira',       base: 5200, theme: 'ira' },
+  { id: 'abismo',   name: 'VI · Abismo',   base: 10000, theme: 'abismo' },
 ];
 OM.TABLE_KINDS = [
   { id: 'menor', name: 'Mesa Menor', mul: 1, reward: 3 },

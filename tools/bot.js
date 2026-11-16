@@ -20,6 +20,13 @@ const CUE = args.cue || 'todos';
 const OUT = args.out || null;
 const QUIET = !!args.quiet;
 
+// experimentos de curva: --bases 200,550,1500,... --kinds 1,1.5,2
+if (args.bases) String(args.bases).split(',').forEach((v, i) => { if (OM.CIRCLES[i]) OM.CIRCLES[i].base = +v; });
+if (args.kinds) String(args.kinds).split(',').forEach((v, i) => { if (OM.TABLE_KINDS[i]) OM.TABLE_KINDS[i].mul = +v; });
+
+// --set SHOT_TYPES.simple.chips=30,CUES.0.shots=6 → cambia datos de diseño para experimentar
+if (args.set) String(args.set).split(',').forEach((kv) => { const [p, v] = kv.split('='); const ks = p.split('.'); let o = OM; ks.slice(0, -1).forEach((k) => (o = o[k])); o[ks[ks.length - 1]] = isNaN(+v) ? v : +v; });
+
 // todo desbloqueado: el bot prueba todo el contenido
 OM.META = { best: 9, wins: 9, maxStreak: 20, bosses: 99, seen: {} };
 
@@ -43,6 +50,7 @@ function playTable(R) {
   const T = { target: OM.Run.target(R), shots: R.baseShots + M.extraShots - (boss === 'reloj' ? 1 : 0), boss, score: 0, refunded: false, streak: 0 };
   // consumibles de mesa: la Tiza se usa al empezar
   for (let i = R.items.length - 1; i >= 0; i--) if (R.items[i] === 'tiza') { OM.LOG.item(R, 'tiza', 'table'); R.items.splice(i, 1); T.shots++; }
+  R.jokers.forEach((J) => J.def.onTableStart && J.def.onTableStart(R, J));
   OM.LOG.tableStart(R, T);
   let onTable = R.balls.slice(), shotIndex = 0;
   while (T.shots > 0 && T.score < T.target) {
@@ -74,7 +82,7 @@ function playTable(R) {
     onTable = onTable.filter((b) => !balls.includes(b) || (cursed && b.num === 8 && !M.eightSafe));
     // cristal
     balls.forEach((b) => { if (b.kind === 'cristal' && rng() < 0.25) { const i = R.balls.indexOf(b); if (i >= 0) R.balls.splice(i, 1); } });
-    if (boss === 'verdugo' && scratch) T.shots = Math.max(0, T.shots - 1);
+    if (boss === 'verdugo' && (scratch || !balls.length)) T.shots = Math.max(0, T.shots - 1);
     T.streak = S.total > 0 ? T.streak + 1 : 0;
     if (!T.refunded && !balls.length && !scratch && M.refundMiss) { T.refunded = true; T.shots++; }
     shotIndex++;

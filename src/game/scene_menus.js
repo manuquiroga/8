@@ -206,7 +206,7 @@ OM.SCENES = OM.SCENES || {};
           if (G.button(L.panel.x + 92, y, 80, 16, 'MENÚ', 'dark')) self.paused = true;
         },
       });
-      OM.HUD.drawJokers(ctx, R, t, {});
+      if (!this.pack) OM.HUD.drawJokers(ctx, R, t, {}); // con sobre abierto se dibuja encima del overlay
       OM.HUD.drawItems(ctx, R, t, 'shop', OM.SCENES.map.api);
       // mostrador
       OM.UI.panel(ctx, AREA.x, AREA.y, AREA.w, AREA.h, 'dark');
@@ -241,7 +241,12 @@ OM.SCENES = OM.SCENES || {};
           const full = (o.type === 'joker' && OM.Run.jokersFull(R) && o.J.edition !== 'negativo') || (o.type === 'item' && R.items.length >= R.itemSlots);
           const can = R.money >= o.price && !full;
           const bw = 50;
-          if (G.button(of.x + of.w / 2 - bw / 2, of.y + of.h + 20, bw, 15, full ? 'LLENO' : 'COMPRAR', 'green', !can)) this.buy(o);
+          // los consumibles usables fuera de la mesa se pueden comprar y usar en un clic (aunque no quede hueco)
+          const usable = o.type === 'item' && OM.HUD.canUse(R, OM.itemDef(o.id), 'shop', OM.SCENES.map.api);
+          if (usable) {
+            if (G.button(of.x + of.w / 2 - bw / 2, of.y + of.h + 20, bw, 15, 'USAR YA', 'gold', R.money < o.price, 'KeyU')) this.buy(o, true);
+            if (G.button(of.x + of.w / 2 - bw / 2, of.y + of.h + 37, bw, 15, full ? 'LLENO' : 'COMPRAR', 'green', !can)) this.buy(o);
+          } else if (G.button(of.x + of.w / 2 - bw / 2, of.y + of.h + 20, bw, 15, full ? 'LLENO' : 'COMPRAR', 'green', !can)) this.buy(o);
         }
       });
       // botones inferiores
@@ -272,7 +277,7 @@ OM.SCENES = OM.SCENES || {};
         packs: S.packs.map((s) => ({ type: 'pack', kind: s.kind, price: s.price, sold: !!s.sold })),
       });
     },
-    buy(o) {
+    buy(o, useNow) {
       const R = OM.R;
       setTimeout(() => this.save(), 0); // tras aplicar la compra
       R.money -= o.price; o.sold = true; this.sel = null;
@@ -280,13 +285,15 @@ OM.SCENES = OM.SCENES || {};
       OM.sfx('buy');
       OM.FX.burst(OM.IN.mx, OM.IN.my, 'gold', 10);
       if (o.type === 'joker') { R.jokers.push(o.J); OM.META.seen[o.id] = 1; OM.saveMeta(); }
-      else if (o.type === 'item') R.items.push(o.id);
+      else if (o.type === 'item') { if (useNow) OM.HUD.useItem(R, -1, 'shop', OM.SCENES.map.api, o.id); else R.items.push(o.id); }
       else { this.pack = { kind: o.kind, opts: OM.Run.openPack(R, o.kind), t: 0 }; OM.sfx('pack_open'); OM.FX.flash('h', 0.25, 0.3); }
     },
     drawPack(ctx, t) {
       const R = OM.R, G = OM.G, P = this.pack;
       P.t += 1 / 60;
       ctx.globalAlpha = 0.8; ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 0, OM.W, OM.H); ctx.globalAlpha = 1;
+      OM.HUD.drawJokers(ctx, R, t, {});
+      if (P.kind === 'maldito' && OM.Run.jokersFull(R)) OM.FONT.draw(ctx, 'Comodines llenos: toca uno de arriba y VÉNDELO para hacer hueco', CX, 104, { color: 'v', align: 'center', shadow: '0' });
       OM.FONT.draw(ctx, PACKS[P.kind].name.toUpperCase(), CX, 66, { color: 'h', size: 2, align: 'center', shadow: '0', wave: 1, t });
       OM.FONT.draw(ctx, 'Elige una carta', CX, 88, { color: '7', align: 'center' });
       P.opts.forEach((op, i) => {

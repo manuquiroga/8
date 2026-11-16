@@ -424,7 +424,7 @@ OM.SCENES = OM.SCENES || {};
         OM.FX.popText(pb.pocket.x, pb.pocket.y - 14, '¡ROTA!', 'r');
       }
     });
-    if (T.boss === 'verdugo' && cur.scratch) { T.shots = Math.max(0, T.shots - 1); OM.FX.popText(100, 200, '-1 TIRO', 'b', { size: 2 }); }
+    if (T.boss === 'verdugo' && (cur.scratch || !cur.pocketed.length)) { T.shots = Math.max(0, T.shots - 1); OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2 + 24, 'EL VERDUGO: -1 TIRO', 'b', { size: 2 }); }
     T.shotIndex++;
     T.streak = S.total > 0 ? T.streak + 1 : 0;
     if (T.streak > (OM.META.maxStreak || 0)) { OM.META.maxStreak = T.streak; OM.saveMeta(); }

@@ -52,3 +52,16 @@
   - La Parca casi nunca se activa: las mesas se ganan antes de que queden ≤5 bolas. Candidata a rediseño.
   - El Verdugo es un jefe FÁCIL (91%).
   - Ojo de Cuervo e Imán salen bajos en el bot porque su valor depende de la física real: conviene confirmarlo con partidas humanas.
+
+## 2026-11-16 · Curva de dificultad calibrada con el bot + findings de tienda
+- El bot mostró que el problema era el **desgaste temprano**: las mesas del Círculo I-II se perdían un 10-15% por rachas de fallos, porque un Simple valía 25-75 puntos. Con objetivos más bajos casi no mejoraba nada.
+- Escalera de tiros: Simple 30×2 (antes 20×1), Doblete 50×3, Triplete 80×4, Masacre 120×6.
+- Objetivos por círculo: 150 / 500 / 1.200 / 2.600 / 5.200 / 10.000 (antes 200 / 550 / 1.500 / 4.500 / 10.000 / 22.000).
+- Resultado (bot, 4000 partidas por nivel): victorias flojo 0,6%→2,1%, medio 0,3%→5,5%, bueno 0,9%→11,3%. Primera mesa: 96-99%. La dificultad ahora está en los jefes de los Círculos III-VI.
+- La Parca: x0.2 Mult por bola embocada en la mesa (antes casi nunca se activaba; ahora aporta ~31%).
+- El Verdugo: fallar también cuesta un tiro (antes se superaba el 92%; ahora 80-86%).
+- La bandera FÁCIL ya no marca los Círculos I-II (fáciles a propósito).
+- `tools/bot.js --bases`, `--kinds` y `--set ruta=valor` para experimentar con el balance sin tocar el código.
+- Tienda: **USAR YA** compra y usa en un clic las lunas, grabados y arcanos que se pueden usar fuera de la mesa, aunque no quede hueco de consumible.
+- Sobre Maldito con la fila llena: la fila de comodines queda por encima del sobre y se puede vender uno para hacer hueco.
+- Pendiente de datos reales: los jefes "físicos" (Péndulo, Ciénaga, Escarcha, Sepulturero) salen FÁCIL en el bot porque el bot no simula la física. La Sanguijuela sí es fácil de verdad (solo cuesta dinero).
