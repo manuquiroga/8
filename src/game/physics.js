@@ -5,17 +5,24 @@ window.OM = window.OM || {};
 
 OM.Physics = (function () {
   const L = OM.LAYOUT;
-  const DECEL = 150;        // px/s² fricción de rodadura
-  const DAMP = 0.12;        // amortiguación lineal (1/s)
+  // v1.1: paño más rápido y bandas más vivas → dobletes y rebotes jugables
+  const DECEL = 95;         // px/s² fricción de rodadura (v1.0: 150)
+  const DAMP = 0.09;        // amortiguación lineal (1/s) (v1.0: 0.12)
   const STOP = 5;           // px/s → se detiene
-  const E_BALL = 0.94, E_CUSH = 0.72;
+  const E_BALL = 0.95, E_CUSH = 0.8;
   const MAXV = 1050;
+  // efecto del taco
+  const SPIN_FOLLOW = 0.8;  // fracción de la velocidad de llegada que el efecto vertical devuelve/añade a la blanca
+  const SPIN_SIDE = 0.45;   // desvío lateral en la primera(s) banda(s)
+  // las troneras "chupan" suavemente las bolas lentas que pasan por la boca
+  const POCKET_PULL = 140;  // px/s²
 
   function create(opts) {
     const W = {
       balls: [], pockets: [], jaws: [], t: 0,
       decel: DECEL * (opts.frictionMul || 1),
       pocketMul: opts.pocketMul || 1,
+      pocketPull: opts.pocketPull || 1,
       sealedSides: !!opts.sealedSides,
       noScratch: !!opts.noScratch,
       tilt: opts.tilt || 0,
@@ -112,6 +119,17 @@ OM.Physics = (function () {
         b.vx += Math.sin(W.t * 1.3) * W.tilt * h;
         b.vy += Math.cos(W.t * 0.9) * W.tilt * 0.4 * h;
       }
+      // atracción de tronera (no a la blanca: no queremos regalar faltas)
+      if (b.num !== 0 && (b.vx || b.vy)) {
+        for (const p of W.pockets) {
+          if (p.sealed) continue;
+          const dx = p.x - b.x, dy = p.y - b.y, d2 = dx * dx + dy * dy, R = p.mouth * 1.7;
+          if (d2 < R * R && d2 > 1) {
+            const d = Math.sqrt(d2), k = POCKET_PULL * W.pocketPull * (1 - d / R) * h;
+            b.vx += (dx / d) * k; b.vy += (dy / d) * k;
+          }
+        }
+      }
       let sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
         const nsp = Math.max(0, sp - (W.decel + DAMP * sp) * h);
@@ -137,9 +155,18 @@ OM.Physics = (function () {
         b.x += nx * overlap * (a.m / tm); b.y += ny * overlap * (a.m / tm);
         const rv = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
         if (rv <= 0) continue;
+        // efecto vertical: se aplica en el primer contacto de la blanca
+        const cue = a.num === 0 && a.spinF ? a : b.num === 0 && b.spinF ? b : null;
+        let dirx = 0, diry = 0, cueSp = 0;
+        if (cue) { cueSp = Math.hypot(cue.vx, cue.vy); if (cueSp) { dirx = cue.vx / cueSp; diry = cue.vy / cueSp; } }
         const jimp = ((1 + E_BALL) * rv) / (1 / a.m + 1 / b.m);
         a.vx -= (jimp / a.m) * nx; a.vy -= (jimp / a.m) * ny;
         b.vx += (jimp / b.m) * nx; b.vy += (jimp / b.m) * ny;
+        if (cue && cueSp) {
+          const k = cue.spinF * SPIN_FOLLOW * rv;
+          cue.vx += dirx * k; cue.vy += diry * k;
+          cue.spinF = 0;
+        }
         emit(W, { type: 'hit', a, b, speed: rv, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
       }
     }
@@ -149,10 +176,18 @@ OM.Physics = (function () {
       const mouth = inMouth(W, b);
       if (!mouth) {
         let hit = false, sp = 0;
+        const pvx = b.vx, pvy = b.vy;
         if (b.x < F.x + b.r) { b.x = F.x + b.r; if (b.vx < 0) { sp = -b.vx; b.vx = -b.vx * E_CUSH; b.vy *= 0.94; hit = true; } }
         if (b.x > F.x + F.w - b.r) { b.x = F.x + F.w - b.r; if (b.vx > 0) { sp = b.vx; b.vx = -b.vx * E_CUSH; b.vy *= 0.94; hit = true; } }
         if (b.y < F.y + b.r) { b.y = F.y + b.r; if (b.vy < 0) { sp = -b.vy; b.vy = -b.vy * E_CUSH; b.vx *= 0.94; hit = true; } }
         if (b.y > F.y + F.h - b.r) { b.y = F.y + F.h - b.r; if (b.vy > 0) { sp = b.vy; b.vy = -b.vy * E_CUSH; b.vx *= 0.94; hit = true; } }
+        if (hit && b.spinS) {
+          // efecto lateral: abre/cierra el ángulo de salida de la banda (a la derecha del avance si spinS>0)
+          const ps = Math.hypot(pvx, pvy) || 1, px = -pvy / ps, py = pvx / ps;
+          const k = b.spinS * SPIN_SIDE * sp;
+          b.vx += px * k; b.vy += py * k;
+          b.spinS *= 0.4; if (Math.abs(b.spinS) < 0.05) b.spinS = 0;
+        }
         if (hit) emit(W, { type: 'cushion', ball: b, speed: sp, x: b.x, y: b.y });
       } else {
         // mandíbulas
@@ -198,9 +233,12 @@ OM.Physics = (function () {
   }
 
   // Golpe sobre la blanca
-  function shoot(W, cue, angle, power) {
+  // spin = {f: -1 (retroceso) .. 1 (seguimiento), s: -1 (izq) .. 1 (der)}
+  function shoot(W, cue, angle, power, spin) {
     const v = Math.min(MAXV * 1.45, power);
     cue.vx = Math.cos(angle) * v; cue.vy = Math.sin(angle) * v;
+    cue.spinF = spin ? spin.f || 0 : 0;
+    cue.spinS = spin ? spin.s || 0 : 0;
   }
 
   // Explosión (grabado Bomba)
@@ -217,6 +255,8 @@ OM.Physics = (function () {
 
   // Impulso de saque (arcade): dispersa el triángulo para que el saque sea espectacular
   function breakBoost(W, cue, power) {
+    // la blanca se "clava" un poco en el saque (menos faltas con el paño rápido de v1.1)
+    cue.vx *= 0.05; cue.vy *= 0.05;
     const objs = W.balls.filter((b) => b.alive && b !== cue);
     if (!objs.length) return;
     const cx = objs.reduce((a, b) => a + b.x, 0) / objs.length, cy = objs.reduce((a, b) => a + b.y, 0) / objs.length;
@@ -241,7 +281,7 @@ OM.Physics = (function () {
   }
 
   // Trazado de la guía: devuelve {pts, ghost, target, objDir, cueDir}
-  function trace(W, cue, angle, maxBounces, maxLen) {
+  function trace(W, cue, angle, maxBounces, maxLen, spinF) {
     const F = L.felt;
     let x = cue.x, y = cue.y, dx = Math.cos(angle), dy = Math.sin(angle);
     const pts = [{ x, y }];
@@ -276,7 +316,12 @@ OM.Physics = (function () {
         const dot = dx * odx + dy * ody;
         let tx = dx - dot * odx, ty = dy - dot * ody; const tl = Math.hypot(tx, ty) || 1;
         tx /= tl; ty /= tl;
-        return { pts, ghost: { x: gx, y: gy }, target: hitBall, objDir: { x: odx, y: ody, k: dot }, cueDir: { x: tx, y: ty, k: Math.sqrt(Math.max(0, 1 - dot * dot)) } };
+        // con efecto vertical, la blanca suma (o resta) una parte de la velocidad de llegada en la dirección del tiro
+        const sk = Math.sqrt(Math.max(0, 1 - dot * dot));
+        const f = spinF ? spinF * SPIN_FOLLOW * dot * (1 + E_BALL) / 2 : 0;
+        let cx = tx * sk + dx * f, cy = ty * sk + dy * f; const ck = Math.hypot(cx, cy);
+        if (ck > 0.001) { cx /= ck; cy /= ck; } else { cx = tx; cy = ty; }
+        return { pts, ghost: { x: gx, y: gy }, target: hitBall, objDir: { x: odx, y: ody, k: dot }, cueDir: { x: cx, y: cy, k: Math.min(1, ck) } };
       }
       len += tw;
       x += dx * tw; y += dy * tw;

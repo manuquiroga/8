@@ -38,14 +38,21 @@ OM.JOKERS = [
     onBall(S, b) { if (b.banked) S.add({ mult: 5 }, this); } },
   { id: 'carambolero', name: 'Carambolero', rarity: 'comun', desc: '+2 Mult por cada bola distinta que toque la blanca.',
     onShot(S) { if (S.balls.length && S.cueContacts > 0) S.add({ mult: 2 * S.cueContacts }, this); } },
-  { id: 'usurero', name: 'Usurero', rarity: 'comun', desc: 'Gana $1 por cada 2 bolas embocadas en un tiro.',
-    onShot(S) { const m = Math.floor(S.balls.length / 2); if (m) S.add({ money: m }, this); } },
+  { id: 'usurero', name: 'Usurero', rarity: 'comun', desc: 'Gana $1 por cada tiro que emboque ($3 si son 2 o más bolas).',
+    onShot(S) { const n = S.balls.length; if (n) S.add({ money: n >= 2 ? 3 : 1 }, this); } },
   { id: 'esquinero', name: 'Esquinero', rarity: 'comun', desc: 'Bolas en troneras de ESQUINA: +4 Mult.',
     onBall(S, b) { if (b.pocket.corner) S.add({ mult: 4 }, this); } },
   { id: 'murcielago', name: 'Murciélago', rarity: 'comun', desc: 'Bolas en troneras LATERALES: +60 Fichas.',
     onBall(S, b) { if (!b.pocket.corner) S.add({ chips: 60 }, this); } },
   { id: 'vela_negra', name: 'Vela Negra', rarity: 'comun', desc: '+1 Tiro en cada mesa.', mods: { extraShots: 1 } },
   { id: 'iman', name: 'Imán Oxidado', rarity: 'comun', desc: 'Las troneras son un 18% más grandes.', mods: { pocketMul: 1.18 } },
+  // v1.1 — control y racha (no dependen de dobletes)
+  { id: 'eslabon', name: 'Eslabón', rarity: 'comun', desc: '+25 Fichas por cada nivel de RACHA.',
+    onShot(S) { if (S.balls.length && S.streak) S.add({ chips: 25 * S.streak }, this); } },
+  { id: 'limosna', name: 'Limosna', rarity: 'comun', desc: 'Cada tiro que FALLA te da $1.',
+    onShot(S) { if (!S.balls.length && !S.scratch) S.add({ money: 1 }, this); } },
+  { id: 'maestro_efecto', name: 'Maestro del Efecto', rarity: 'comun', desc: 'Tiros con efecto (retroceso, seguimiento o lateral): +5 Mult.',
+    onShot(S) { if (S.balls.length && S.spun) S.add({ mult: 5 }, this); } },
 
   // ---------------- RAROS ----------------
   { id: 'racha', name: 'Racha Febril', rarity: 'raro', desc: 'Gana +2 Mult por cada tiro seguido que emboca. Se reinicia al fallar. (Actual: +{v} Mult)',
@@ -56,8 +63,8 @@ OM.JOKERS = [
     state: () => ({ v: 0 }),
     onShot(S, J) { if (S.balls.length && J.st.v) S.add({ chips: J.st.v }, J); },
     onAfter(S, J) { J.st.v += 3 * S.balls.length; } },
-  { id: 'doble_fondo', name: 'Doble Fondo', rarity: 'raro', desc: 'Tiros con 2 o más bolas: x2 Mult.',
-    onShot(S) { if (S.balls.length >= 2) S.add({ xmult: 2 }, this); } },
+  { id: 'doble_fondo', name: 'Doble Fondo', rarity: 'raro', desc: 'Tiros con 2 o más bolas: x3 Mult.',
+    onShot(S) { if (S.balls.length >= 2) S.add({ xmult: 3 }, this); } },
   { id: 'ojo_cuervo', name: 'Ojo de Cuervo', rarity: 'raro', desc: 'La guía muestra el rebote de la blanca y la trayectoria completa.', mods: { guide: 2 } },
   { id: 'ricochet', name: 'Ricochet', rarity: 'raro', desc: '+12 Mult si la blanca toca 3 o más bandas.',
     onShot(S) { if (S.balls.length && S.cueCushions >= 3) S.add({ mult: 12 }, this); } },
@@ -74,6 +81,9 @@ OM.JOKERS = [
   { id: 'ocho_maldito', name: 'El 8', rarity: 'raro', desc: 'Meter la 8 antes de tiempo NO maldice: da x3 Mult.',
     mods: { eightSafe: true }, onBall(S, b) { if (b.ball.num === 8) S.add({ xmult: 3 }, this); } },
   { id: 'fantasma', name: 'Blanca Fantasma', rarity: 'raro', desc: 'La blanca no puede caer en las troneras.', mods: { noScratch: true } },
+  { id: 'pulso', name: 'Pulso de Cirujano', rarity: 'raro', desc: 'x1.5 Mult si la blanca NO toca ninguna banda.',
+    onShot(S) { if (S.balls.length && S.cueCushions === 0) S.add({ xmult: 1.5 }, this); } },
+  { id: 'segunda', name: 'Segunda Oportunidad', rarity: 'raro', desc: 'Una vez por mesa, si un tiro no mete nada, lo recuperas.', mods: { refundMiss: true } },
 
   // ---------------- ÉPICOS ----------------
   { id: 'avalancha', name: 'Avalancha', rarity: 'epico', desc: 'Cada bola embocada multiplica x1.5 Mult.',
@@ -84,13 +94,36 @@ OM.JOKERS = [
   { id: 'espejo_roto', name: 'Espejo Roto', rarity: 'epico', desc: 'Copia la habilidad del comodín a su DERECHA.', copy: true },
   { id: 'parca', name: 'La Parca', rarity: 'epico', desc: 'x3 Mult si quedan 5 bolas o menos en la mesa.',
     onShot(S) { if (S.balls.length && S.ballsLeft <= 5) S.add({ xmult: 3 }, this); } },
+  { id: 'cadena', name: 'Cadena Infernal', rarity: 'epico', desc: 'x0.5 Mult extra por cada nivel de RACHA.', unlock: 'racha5',
+    onShot(S) { if (S.balls.length && S.streak) S.add({ xmult: 1 + 0.5 * S.streak }, this); } },
 
   // ---------------- LEGENDARIOS (solo en Sobres Malditos) ----------------
   { id: 'diablo', name: 'El Diablo', rarity: 'legendario', desc: 'Cada bola embocada da $1 y x1.25 Mult.',
     onBall(S) { S.add({ money: 1, xmult: 1.25 }, this); } },
   { id: 'ojo_abismo', name: 'Ojo del Abismo', rarity: 'legendario', desc: 'Cada bola cuenta como si estuviera grabada en HOLO (+10 Mult).',
     onBall(S) { S.add({ mult: 10 }, this); } },
+  { id: 'barquero', name: 'El Barquero', rarity: 'legendario', desc: 'Las troneras atraen las bolas con fuerza y son un 15% más grandes.', unlock: 'win',
+    mods: { pocketMul: 1.15, pocketPull: 3 } },
 ];
+
+// Ediciones de comodín (v1.1). Salen al azar en la tienda y sobres.
+OM.EDITIONS = {
+  foil:     { name: 'Laminado', desc: '+50 Fichas', chance: 0.08, price: 2 },
+  holo:     { name: 'Holográfico', desc: '+10 Mult', chance: 0.04, price: 3 },
+  poli:     { name: 'Policromo', desc: 'x1.5 Mult', chance: 0.02, price: 5 },
+  negativo: { name: 'Negativo', desc: '+1 hueco de comodín', chance: 0.02, price: 5 },
+};
+
+// Desbloqueos persistentes (v1.1). test(META) → desbloqueado.
+OM.UNLOCKS = {
+  circulo2: { desc: 'Llega al Círculo II', test: (M) => M.best >= 1 },
+  circulo3: { desc: 'Llega al Círculo III', test: (M) => M.best >= 2 },
+  circulo4: { desc: 'Llega al Círculo IV', test: (M) => M.best >= 3 },
+  racha5:   { desc: 'Consigue una RACHA x5 en una mesa', test: (M) => (M.maxStreak || 0) >= 4 },
+  jefes3:   { desc: 'Derrota a 3 jefes (total)', test: (M) => (M.bosses || 0) >= 3 },
+  win:      { desc: 'Escapa del Abismo una vez', test: (M) => M.wins >= 1 },
+};
+OM.isUnlocked = (key) => !key || !OM.UNLOCKS[key] || OM.UNLOCKS[key].test(OM.META || {});
 
 // Grabados de bola (mejoras permanentes del "mazo" de 15 bolas)
 OM.ENGRAVINGS = {
@@ -141,8 +174,9 @@ OM.ITEMS = [
 OM.CUES = [
   { id: 'peregrino', name: 'Taco del Peregrino', desc: 'Equilibrado. 5 tiros por mesa, $4.', shots: 5, money: 4 },
   { id: 'sangriento', name: 'Taco Sangriento', desc: 'Empieza con Tiza Azul. 4 tiros por mesa.', shots: 4, money: 4, joker: 'tiza_azul' },
-  { id: 'usura', name: 'Taco de la Usura', desc: 'Empieza con $12. Interés hasta $8.', shots: 5, money: 12, interestCap: 8 },
-  { id: 'hueso', name: 'Taco de Hueso', desc: '3 bolas grabadas al azar. 1 comodín menos.', shots: 5, money: 4, randomEng: 3, slots: -1 },
+  { id: 'usura', name: 'Taco de la Usura', desc: 'Empieza con $12. Interés hasta $8.', shots: 5, money: 12, interestCap: 8, unlock: 'circulo2' },
+  { id: 'hueso', name: 'Taco de Hueso', desc: '3 bolas grabadas al azar. 1 comodín menos.', shots: 5, money: 4, randomEng: 3, slots: -1, unlock: 'circulo3' },
+  { id: 'espectral', name: 'Taco Espectral', desc: 'Empieza con Blanca Fantasma. 4 tiros por mesa.', shots: 4, money: 4, joker: 'fantasma', unlock: 'jefes3' },
 ];
 
 // Jefes (mesas de jefe con reglas malditas)
@@ -156,14 +190,17 @@ OM.BOSSES = [
   { id: 'cienaga', name: 'La Ciénaga', desc: 'El paño frena el doble.' },
   { id: 'escarcha', name: 'La Escarcha', desc: 'El paño apenas frena. Todo resbala.' },
   { id: 'coleccionista', name: 'El Coleccionista', desc: 'Solo puntúan las bolas RAYADAS.' },
+  { id: 'ciego', name: 'El Ciego', desc: 'No hay guía de apuntado: solo el taco.' },
+  { id: 'purista', name: 'La Purista', desc: 'Solo puntúan las bolas LISAS.' },
+  { id: 'reloj', name: 'El Reloj', desc: 'Tienes 1 tiro menos en esta mesa.' },
   { id: 'boca', name: 'La Boca', desc: 'Las troneras se encogen a la mitad.', final: true },
 ];
 
 // Círculos (actos). 3 mesas cada uno: Menor, Mayor, Jefe.
 OM.CIRCLES = [
-  { id: 'limbo',    name: 'I · Limbo',     base: 250,   theme: 'limbo' },
-  { id: 'lujuria',  name: 'II · Lujuria',  base: 700,   theme: 'lujuria' },
-  { id: 'gula',     name: 'III · Gula',    base: 1800,  theme: 'gula' },
+  { id: 'limbo',    name: 'I · Limbo',     base: 200,   theme: 'limbo' },
+  { id: 'lujuria',  name: 'II · Lujuria',  base: 550,   theme: 'lujuria' },
+  { id: 'gula',     name: 'III · Gula',    base: 1500,  theme: 'gula' },
   { id: 'avaricia', name: 'IV · Avaricia', base: 4500,  theme: 'avaricia' },
   { id: 'ira',      name: 'V · Ira',       base: 10000, theme: 'ira' },
   { id: 'abismo',   name: 'VI · Abismo',   base: 22000, theme: 'abismo' },

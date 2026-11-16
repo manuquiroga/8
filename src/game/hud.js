@@ -12,7 +12,7 @@ OM.HUD = (function () {
   };
 
   function jokerX(R, i) {
-    const n = Math.max(R.jokerSlots, 1);
+    const n = Math.max(OM.Run.slots(R), 1);
     const sp = n > 1 ? Math.min(65, (L.jokers.w - L.cardW) / (n - 1)) : 0;
     return Math.round(L.jokers.x + i * sp);
   }
@@ -24,6 +24,8 @@ OM.HUD = (function () {
   function jokerDesc(J) {
     let d = J.def.desc;
     if (J.st && J.st.v !== undefined) d = d.replace('{v}', Math.round(J.st.v * 100) / 100);
+    const E = J.edition && OM.EDITIONS[J.edition];
+    if (E) d += ' ' + E.name.toUpperCase() + ': ' + E.desc + '.';
     return OM.colorize(d);
   }
   H.jokerDesc = jokerDesc;
@@ -33,11 +35,11 @@ OM.HUD = (function () {
     const IN = OM.IN, G = OM.G;
     const y0 = L.jokers.y + 2;
     // ranuras vacías
-    for (let i = 0; i < R.jokerSlots; i++) {
+    for (let i = 0; i < OM.Run.slots(R); i++) {
       const x = jokerX(R, i);
       ctx.globalAlpha = 0.35; OM.UI.panel(ctx, x, y0, L.cardW, L.cardH, 'inset'); ctx.globalAlpha = 1;
     }
-    OM.FONT.draw(ctx, R.jokers.length + '/' + R.jokerSlots, L.jokers.x + L.jokers.w - 2, L.jokers.y + L.jokers.h + 1, { color: '6', align: 'right' });
+    OM.FONT.draw(ctx, R.jokers.length + '/' + OM.Run.slots(R), L.jokers.x + L.jokers.w - 2, L.jokers.y + L.jokers.h + 1, { color: '6', align: 'right' });
     // arrastre
     if (H.drag) {
       if (!IN.down) {
@@ -60,7 +62,7 @@ OM.HUD = (function () {
       const jig = H.jiggle[J.uid] || 0;
       if (jig > 0) H.jiggle[J.uid] = jig - 1 / 60;
       const sc = 1 + Math.max(0, jig) * 0.6;
-      OM.CARDS.drawJoker(ctx, J.def, x, y - (sel ? 6 : 0), { t, hover: hov || dragging, selected: sel, scale: sc, wobble: !dragging, seed: i });
+      OM.CARDS.drawJoker(ctx, J.def, x, y - (sel ? 6 : 0), { t, hover: hov || dragging, selected: sel, scale: sc, wobble: !dragging, seed: i, edition: J.edition });
       if (hov && IN.pressed && opts.interactive !== false) { H.drag = { idx: i, ox: IN.mx - x, sx: IN.mx, moved: false }; }
       if (hov && IN.released && H.drag === null && opts.interactive !== false && !IN.consumed) {
         H.sel = sel ? null : { type: 'joker', idx: i }; IN.consumed = true; OM.sfx('card_flip');
@@ -120,7 +122,7 @@ OM.HUD = (function () {
   function canUse(R, def, mode, api) {
     if (def.when === 'table' && mode !== 'table') return false;
     if (mode === 'table' && api && !api.canUseItem()) return false;
-    if (def.id === 'juicio' && R.jokers.length >= R.jokerSlots) return false;
+    if (def.id === 'juicio' && OM.Run.jokersFull(R)) return false;
     return true;
   }
   H.canUse = canUse;

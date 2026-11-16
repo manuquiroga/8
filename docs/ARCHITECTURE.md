@@ -8,6 +8,7 @@ src/art/font.js         OM.FONT  — fuente bitmap (agente UI)
 src/art/ui_art.js       OM.UI    — paneles, botones, iconos, fondos, logo (agente UI)
 src/art/fx.js           OM.FX    — partículas, textos flotantes, shake, CRT, transiciones (agente UI)
 src/art/cards_art.js    OM.CARDS — comodines, consumibles, jefes, tacos, sobres (agente cartas)
+src/art/cards_art_v11.js  sprites del contenido v1.1 (mismas primitivas, se registra antes de ART_INIT)
 src/art/table_art.js    OM.TABLE — mesa, troneras, bolas, taco, guía, fondos de círculo (agente mesa)
 src/audio/audio.js      OM.AUDIO — SFX y música procedurales WebAudio (agente audio)
 src/game/data.js        Datos de diseño: comodines (con hooks), objetos, tacos, jefes, círculos
@@ -32,3 +33,4 @@ Cada comodín es un objeto de datos con hooks (`onBall`, `onShot`, `onAfter`, `o
 - `node tools/simtest.js` — física headless (saque, tiro a tronera) y puntuación.
 - `node tools/balance.js` — puntos medios por mesa para calibrar objetivos.
 - `node tools/playtest.js <dir>` — recorre el juego en Chromium y guarda capturas + errores.
+- `node tools/serve.js [puerto]` — servidor estático local (por defecto 8088).

@@ -24,7 +24,7 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- TÍTULO ----------------
   OM.SCENES.title = {
-    enter() { OM.music('menu'); this.opts = false; },
+    enter() { OM.music('menu'); this.opts = false; this.saved = OM.hasRun(); },
     update() {},
     draw(ctx, t) {
       const G = OM.G, M = OM.META;
@@ -32,14 +32,28 @@ OM.SCENES = OM.SCENES || {};
       OM.UI.logo(ctx, CX, 20, t);
       OM.FONT.draw(ctx, 'un roguelite de billar en el bar del infierno', CX, 184, { color: '6', align: 'center', shadow: '0' });
       const bw = 170, bx = CX - bw / 2;
-      if (G.button(bx, 204, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
-      if (G.button(bx, 232, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
-      if (G.button(bx, 256, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
-      if (G.button(bx + 88, 256, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
+      let y = 200;
+      if (this.saved) {
+        if (G.button(bx, y, bw, 22, 'CONTINUAR', 'green', false, 'Enter')) {
+          const res = OM.loadRun();
+          if (res) { OM.R = res.R; OM.go(res.scene === 'shop' ? 'shop' : 'map', res.extra); }
+          else this.saved = false;
+        }
+        y += 26;
+        if (G.button(bx, y, bw, 18, 'NUEVA PARTIDA', 'red')) OM.go('cues');
+        y += 22;
+      } else {
+        if (G.button(bx, y + 4, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
+        y += 30;
+      }
+      if (G.button(bx, y, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
+      y += 22;
+      if (G.button(bx, y, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
+      if (G.button(bx + 88, y, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
       const seen = Object.keys(M.seen).length;
       const stats = 'Partidas ' + M.runs + '   ·   Victorias ' + M.wins + '   ·   Mejor círculo ' + (M.best ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VI+'][Math.min(6, M.best)] : '-') + '   ·   Récord de tiro ' + OM.fmt(M.bestShot) + '   ·   Comodines ' + seen + '/' + OM.JOKERS.length;
-      OM.FONT.draw(ctx, stats, CX, 300, { color: '5', align: 'center' });
-      OM.FONT.draw(ctx, 'v1.0 · M: silenciar música', CX, 345, { color: '3', align: 'center' });
+      OM.FONT.draw(ctx, stats, CX, 304, { color: '5', align: 'center' });
+      OM.FONT.draw(ctx, 'v1.1 · M: silenciar música', CX, 345, { color: '3', align: 'center' });
     },
   };
 
@@ -51,21 +65,27 @@ OM.SCENES = OM.SCENES || {};
       OM.UI.drawBackground(ctx, t, 'map');
       OM.FONT.draw(ctx, 'ELIGE TU TACO', CX, 24, { color: '8', size: 2, align: 'center', shadow: '0' });
       OM.FONT.draw(ctx, 'Cada taco cambia las reglas de tu descenso', CX, 46, { color: '6', align: 'center' });
-      const cw = 140, gap = 10, total = OM.CUES.length * cw + (OM.CUES.length - 1) * gap;
+      const cw = 114, gap = 8, total = OM.CUES.length * cw + (OM.CUES.length - 1) * gap;
       OM.CUES.forEach((c, i) => {
         const x = Math.round(CX - total / 2 + i * (cw + gap)), y = 72;
+        const open = OM.isUnlocked(c.unlock);
         const sel = this.sel === i, hov = G.inside(x, y, cw, 200);
+        ctx.globalAlpha = open ? 1 : 0.55;
         OM.UI.panel(ctx, x, y - (sel ? 4 : 0), cw, 200, sel ? 'gold' : 'dark');
         const yy = y - (sel ? 4 : 0);
         ctx.save(); ctx.translate(x + cw / 2 - 24, yy + 14); ctx.scale(2, 2);
         OM.PX.draw(ctx, 'cue_' + c.id, 0, 0);
         ctx.restore();
-        OM.FONT.draw(ctx, c.name, x + cw / 2, yy + 70, { color: sel ? 'i' : '8', align: 'center', shadow: '0' });
-        OM.FONT.wrap(OM.colorize(c.desc), cw - 16).forEach((ln, j) => OM.FONT.draw(ctx, ln, x + 8, yy + 88 + j * 11, { color: '7' }));
-        if (c.joker) OM.CARDS.drawJoker(ctx, OM.jokerDef(c.joker), x + cw / 2 - 20, yy + 136, { t });
-        if (hov) { G.cursor = 'grab'; if (G.clicked(x, y, cw, 200)) { this.sel = i; OM.sfx('card_flip'); } }
+        ctx.globalAlpha = 1;
+        OM.FONT.draw(ctx, open ? c.name : 'BLOQUEADO', x + cw / 2, yy + 70, { color: !open ? '6' : sel ? 'i' : '8', align: 'center', shadow: '0' });
+        const body = open ? OM.colorize(c.desc) : OM.UNLOCKS[c.unlock].desc + '.';
+        OM.FONT.wrap(body, cw - 14).forEach((ln, j) => OM.FONT.draw(ctx, ln, x + 7, yy + 88 + j * 11, { color: open ? '7' : '5' }));
+        if (c.joker && open) OM.CARDS.drawJoker(ctx, OM.jokerDef(c.joker), x + cw / 2 - 20, yy + 136, { t });
+        if (hov && open) { G.cursor = 'grab'; if (G.clicked(x, y, cw, 200)) { this.sel = i; OM.sfx('card_flip'); } }
       });
+      if (!OM.isUnlocked(OM.CUES[this.sel].unlock)) this.sel = 0;
       if (G.button(CX - 90, 296, 180, 24, 'DESCENDER', 'red', false, 'Enter')) {
+        OM.clearRun();
         OM.R = OM.Run.create(OM.CUES[this.sel].id);
         OM.R.jokers.forEach((J) => (OM.META.seen[J.id] = 1));
         OM.META.runs++; OM.saveMeta();
@@ -77,7 +97,7 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- MAPA (selección de mesa) ----------------
   OM.SCENES.map = {
-    enter() { OM.music('menu'); OM.HUD.sel = null; this.paused = false; this.showBalls = false; },
+    enter() { OM.music('menu'); OM.HUD.sel = null; this.paused = false; this.showBalls = false; OM.saveRun('map'); },
     update() { if (OM.IN.kp.Escape && !OM.HUD.picker) this.paused = !this.paused; },
     draw(ctx, t) {
       const R = OM.R, G = OM.G;
@@ -131,10 +151,19 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- TIENDA ----------------
   OM.SCENES.shop = {
-    enter() {
+    enter(saved) {
       const R = OM.R;
-      this.shop = OM.Run.makeShop(R);
-      R.rerollCost = 5;
+      if (saved && saved.slots) {
+        // tienda restaurada de una partida guardada
+        this.shop = {
+          slots: saved.slots.map((s) => { const J = OM.Run.newJoker(s.id, s.edition); return { type: 'joker', id: s.id, J, price: s.price, sold: s.sold }; }),
+          items: saved.items, packs: saved.packs,
+        };
+      } else {
+        this.shop = OM.Run.makeShop(R);
+        R.rerollCost = 5;
+      }
+      this.save();
       this.sel = null; this.pack = null; this.paused = false; this.showBalls = false;
       OM.HUD.sel = null;
       OM.music('shop');
@@ -171,7 +200,7 @@ OM.SCENES = OM.SCENES || {};
         const hov = G.inside(of.x, of.y, of.w, of.h) && !this.pack && !OM.HUD.picker;
         const sel = this.sel === o;
         const yy = of.y - (sel ? 5 : 0);
-        if (o.type === 'joker') OM.CARDS.drawJoker(ctx, o.J.def, of.x, yy, { t, hover: hov, selected: sel, wobble: true, seed: idx });
+        if (o.type === 'joker') OM.CARDS.drawJoker(ctx, o.J.def, of.x, yy, { t, hover: hov, selected: sel, wobble: true, seed: idx, edition: o.J.edition });
         else if (o.type === 'item') OM.CARDS.drawItem(ctx, OM.itemDef(o.id), of.x, yy, { t, hover: hov, selected: sel });
         else OM.CARDS.drawPack(ctx, o.kind, of.x, yy, { t, hover: hov, selected: sel });
         // etiqueta de precio
@@ -185,7 +214,7 @@ OM.SCENES = OM.SCENES || {};
           if (G.clicked(of.x, of.y, of.w, of.h)) { this.sel = sel ? null : o; OM.sfx('card_flip'); }
         }
         if (sel) {
-          const full = (o.type === 'joker' && R.jokers.length >= R.jokerSlots) || (o.type === 'item' && R.items.length >= R.itemSlots);
+          const full = (o.type === 'joker' && OM.Run.jokersFull(R) && o.J.edition !== 'negativo') || (o.type === 'item' && R.items.length >= R.itemSlots);
           const can = R.money >= o.price && !full;
           const bw = 50;
           if (G.button(of.x + of.w / 2 - bw / 2, of.y + of.h + 20, bw, 15, full ? 'LLENO' : 'COMPRAR', 'green', !can)) this.buy(o);
@@ -198,7 +227,7 @@ OM.SCENES = OM.SCENES || {};
         R.money -= R.rerollCost; R.rerollCost++;
         const keepPacks = S.packs;
         this.shop = OM.Run.makeShop(R); this.shop.packs = keepPacks; this.sel = null;
-        OM.sfx('reroll');
+        OM.sfx('reroll'); this.save();
       }
       OM.FONT.draw(ctx, 'Interés: {h}$1{/} por cada {h}$5{/} (máx. {h}$' + R.interestCap + '{/})', AREA.x + AREA.w / 2, by - 16, { color: '6', align: 'center' });
       // frase del barquero
@@ -209,8 +238,17 @@ OM.SCENES = OM.SCENES || {};
       if (OM.HUD.picker) OM.HUD.drawPicker(ctx, R, t);
       if (this.paused) OM.drawPause(ctx, t, () => (this.paused = false));
     },
+    save() {
+      const S = this.shop;
+      OM.saveRun('shop', {
+        slots: S.slots.map((s) => ({ id: s.id, edition: s.J.edition, price: s.price, sold: !!s.sold })),
+        items: S.items.map((s) => ({ type: 'item', id: s.id, price: s.price, sold: !!s.sold })),
+        packs: S.packs.map((s) => ({ type: 'pack', kind: s.kind, price: s.price, sold: !!s.sold })),
+      });
+    },
     buy(o) {
       const R = OM.R;
+      setTimeout(() => this.save(), 0); // tras aplicar la compra
       R.money -= o.price; o.sold = true; this.sel = null;
       OM.sfx('buy');
       OM.FX.burst(OM.IN.mx, OM.IN.my, 'gold', 10);
@@ -234,14 +272,14 @@ OM.SCENES = OM.SCENES || {};
         if (!op.flipped) { op.flipped = true; OM.sfx('card_flip', { pitch: 1 + i * 0.1 }); }
         const hov = G.inside(x, y, w, h) && !OM.HUD.picker;
         ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(2, 2); ctx.translate(-w / 2, -h / 2);
-        if (big) OM.CARDS.drawJoker(ctx, op.J.def, 0, 0, { t, hover: hov, wobble: true, seed: i });
+        if (big) OM.CARDS.drawJoker(ctx, op.J.def, 0, 0, { t, hover: hov, wobble: true, seed: i, edition: op.J.edition });
         else OM.CARDS.drawItem(ctx, OM.itemDef(op.id), 0, 0, { t, hover: hov });
         ctx.restore();
         let name, desc, color, sub;
         if (big) { name = op.J.def.name; desc = OM.HUD.jokerDesc(op.J); const rl = OM.RARITY[op.J.def.rarity]; color = rl.color; sub = rl.name; }
         else { const d = OM.itemDef(op.id); name = d.name; desc = OM.colorize(d.desc); color = 't'; sub = d.kind; }
         if (hov) { G.cursor = 'grab'; G.tooltip(x + w / 2, y + h * 1.5 + 30, name, desc, color, sub); }
-        const full = big && R.jokers.length >= R.jokerSlots;
+        const full = big && OM.Run.jokersFull(R) && op.J.edition !== 'negativo';
         if (G.button(x + w / 2 - 30, y + h + 36, 60, 16, full ? 'LLENO' : 'ELEGIR', 'green', full || !!OM.HUD.picker)) {
           this.pack = null;
           if (big) { R.jokers.push(op.J); OM.META.seen[op.id] = 1; OM.saveMeta(); OM.sfx('buy'); }
@@ -281,7 +319,7 @@ OM.SCENES = OM.SCENES || {};
         else OM.CARDS.drawBack(ctx, x, y, 'joker', { t });
         if (G.inside(x, y, cw, ch)) {
           if (seen) { const rl = OM.RARITY[j.rarity]; G.tooltip(x + cw / 2, y + ch + 4, j.name, OM.colorize(j.desc), rl.color, rl.name); }
-          else G.tooltip(x + cw / 2, y + ch + 4, '???', 'Aún no descubierto.', '5', OM.RARITY[j.rarity].name);
+          else G.tooltip(x + cw / 2, y + ch + 4, '???', OM.isUnlocked(j.unlock) ? 'Aún no descubierto.' : 'BLOQUEADO: ' + OM.UNLOCKS[j.unlock].desc + '.', '5', OM.RARITY[j.rarity].name);
         }
       });
       if (G.button(CX - 50, 330, 100, 18, 'VOLVER', 'dark', false, 'Escape')) OM.go('title');
@@ -290,7 +328,12 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- GAME OVER ----------------
   OM.SCENES.gameover = {
-    enter(arg) { this.arg = arg || {}; OM.music('gameover'); OM.sfx('lose'); this.t0 = OM.time; OM.saveMeta(); },
+    enter(arg) {
+      this.arg = arg || {};
+      OM.music('gameover');
+      if (!this.arg.silent) OM.sfx('lose'); // si venimos de la mesa, ya sonó al perder
+      OM.clearRun(); OM.saveMeta();
+    },
     draw(ctx, t) {
       const R = OM.R, G = OM.G;
       OM.UI.drawBackground(ctx, t, 'gameover');
@@ -312,16 +355,16 @@ OM.SCENES = OM.SCENES || {};
         OM.FONT.draw(ctx, r[0], x + 14, y + 12 + i * 18, { color: '7' });
         OM.FONT.draw(ctx, r[1], x + w - 14, y + 12 + i * 18, { color: i === 0 ? 'c' : '8', align: 'right' });
       });
-      R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 254, { t }));
+      R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 254, { t, edition: J.edition }));
       if (G.button(CX - 130, 322, 124, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
-      if (G.button(CX + 6, 322, 124, 22, 'MENÚ', 'dark', false, 'Escape')) OM.go('title');
+      if (G.button(CX + 6, 322, 124, 22, 'VOLVER AL MENÚ', 'dark', false, 'Escape')) OM.go('title');
     },
   };
 
   // ---------------- VICTORIA ----------------
   OM.SCENES.victory = {
     drawsFX: true,
-    enter() { OM.META.wins++; OM.saveMeta(); OM.music('menu'); OM.sfx('win_table'); this.t0 = OM.time; },
+    enter() { OM.META.wins++; OM.saveMeta(); OM.clearRun(); OM.music('menu'); OM.sfx('win_table'); this.t0 = OM.time; },
     draw(ctx, t) {
       const R = OM.R, G = OM.G;
       OM.UI.drawBackground(ctx, t, 'victory');
@@ -335,7 +378,7 @@ OM.SCENES = OM.SCENES || {};
         OM.FONT.draw(ctx, r[0], CX - 110, 150 + i * 16, { color: '6' });
         OM.FONT.draw(ctx, r[1], CX + 110, 150 + i * 16, { color: '8', align: 'right' });
       });
-      R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 226, { t, wobble: true, seed: i }));
+      R.jokers.forEach((J, i) => OM.CARDS.drawJoker(ctx, J.def, CX - (R.jokers.length * 46) / 2 + i * 46 + 3, 226, { t, wobble: true, seed: i, edition: J.edition }));
       if (G.button(CX - 150, 316, 140, 22, 'MODO INFINITO', 'gold')) { R.infinite = true; OM.go('shop'); }
       if (G.button(CX + 10, 316, 140, 22, 'MENÚ', 'dark')) OM.go('title');
     },

@@ -13,6 +13,18 @@ window.OM = window.OM || {};
   OM.META = { best: 0, runs: 0, wins: 0, bestShot: 0, seen: {}, crt: true, music: true, sfx: true, tutorial: false };
   try { Object.assign(OM.META, JSON.parse(localStorage.getItem('om_meta') || '{}')); } catch (e) {}
   OM.saveMeta = () => { try { localStorage.setItem('om_meta', JSON.stringify(OM.META)); } catch (e) {} };
+  // partida en curso (v1.1): se guarda entre mesas; continuar vuelve al mapa o a la tienda
+  OM.saveRun = (scene, extra) => { try { if (OM.R) localStorage.setItem('om_run', OM.Run.serialize(OM.R, scene, extra)); } catch (e) { console.error('saveRun', e); } };
+  OM.clearRun = () => { try { localStorage.removeItem('om_run'); } catch (e) {} };
+  OM.hasRun = () => { try { return !!localStorage.getItem('om_run'); } catch (e) { return false; } };
+  OM.loadRun = () => {
+    try {
+      const s = localStorage.getItem('om_run'); if (!s) return null;
+      const res = OM.Run.deserialize(s);
+      if (!res) { OM.clearRun(); return null; }
+      return res;
+    } catch (e) { console.error('loadRun', e); OM.clearRun(); return null; }
+  };
 
   // ---------- entrada ----------
   const IN = OM.IN = { mx: -99, my: -99, down: false, pressed: false, released: false, rpressed: false, wheel: 0, keys: {}, kp: {}, pressX: 0, pressY: 0, touch: false, consumed: false };

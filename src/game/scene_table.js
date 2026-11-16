@@ -46,6 +46,7 @@ OM.SCENES = OM.SCENES || {};
       noScratch: M.noScratch,
       frictionMul: boss === 'cienaga' ? 2 : boss === 'escarcha' ? 0.45 : 1,
       tilt: boss === 'pendulo' ? 70 : 0,
+      pocketPull: M.pocketPull,
     });
     return W;
   }
@@ -80,10 +81,11 @@ OM.SCENES = OM.SCENES || {};
       const boss = OM.Run.boss(R);
       T = {
         W: null, phase: 'place', placeAny: false, angle: 0, power: 0, charging: false, strike: 0,
-        shots: R.baseShots + M.extraShots, shotIndex: 0, score: 0, scoreShown: 0,
-        target: OM.Run.target(R), boss, guide: M.guide, cur: null, play: null, endT: 0,
+        shots: R.baseShots + M.extraShots - (boss === 'reloj' ? 1 : 0), shotIndex: 0, score: 0, scoreShown: 0, refunded: false,
+        target: OM.Run.target(R), boss, guide: boss === 'ciego' ? 0 : M.guide, cur: null, play: null, endT: 0,
         chips: 0, mult: 0, shotName: '', shotColor: '7', bump: { c: 0, m: 0 }, multStr: '0',
         showBalls: false, paused: false, lastHit: 0, cashout: null, msg: null, t0: OM.time, aimKey: false,
+        spin: { f: 0, s: 0 }, streak: 0,
       };
       T.remaining = () => {
         const onTable = new Set(T.W.balls.filter((b) => b.alive && b.num !== 0).map((b) => b.src));
@@ -126,7 +128,7 @@ OM.SCENES = OM.SCENES || {};
       const R = OM.R, IN = OM.IN, W = T.W;
       if (T.intro > 0) T.intro -= dt;
       T.bump.c = Math.max(0, T.bump.c - dt * 5); T.bump.m = Math.max(0, T.bump.m - dt * 5);
-      if (IN.kp.Escape && !OM.HUD.picker && !T.showBalls && T.phase !== 'won') T.paused = !T.paused;
+      if (IN.kp.Escape && !OM.HUD.picker && !T.showBalls && T.phase !== 'won' && T.phase !== 'lost') T.paused = !T.paused;
       if (T.paused || OM.HUD.picker || T.showBalls) return;
       // suavizar marcador
       T.scoreShown += (T.score - T.scoreShown) * Math.min(1, dt * 8);
@@ -139,10 +141,7 @@ OM.SCENES = OM.SCENES || {};
         if (T.strike <= 0) doShoot();
       } else if (T.phase === 'rolling') updateRolling(dt);
       else if (T.phase === 'scoring') updateScoring(dt);
-      else if (T.phase === 'lost') {
-        T.endT -= dt;
-        if (T.endT <= 0) OM.go('gameover', { reason: 'score', score: T.score, target: T.target });
-      }
+      else if (T.phase === 'lost') T.endT -= dt; // el paso a 'gameover' lo hace el botón de drawLost (una sola vez)
       if (T.phase !== 'rolling') OM.Physics.step(W, dt); // animaciones de caída
     },
 
@@ -167,10 +166,49 @@ OM.SCENES = OM.SCENES || {};
   }
 
   // ---------------- apuntar ----------------
-  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.mx > 186 && !OM.HUD.sel; }
+  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.my < L.bottom.y - 2 && IN.mx > 186 && !OM.HUD.sel; }
+
+  // ---- selector de efecto (punto de impacto en la blanca) ----
+  const SPIN_UI = { x: L.bottom.x + L.bottom.w - 24, y: L.bottom.y + 20, r: 15 };
+  function updateSpin() {
+    const IN = OM.IN, S = SPIN_UI, sp = T.spin;
+    const step = 0.25, clamp = () => {
+      const d = Math.hypot(sp.f, sp.s); if (d > 1) { sp.f /= d; sp.s /= d; }
+      sp.f = Math.round(sp.f * 100) / 100; sp.s = Math.round(sp.s * 100) / 100;
+    };
+    if (IN.kp.KeyW) { sp.f += step; clamp(); OM.sfx('click'); }
+    if (IN.kp.KeyS) { sp.f -= step; clamp(); OM.sfx('click'); }
+    if (IN.kp.KeyA) { sp.s -= step; clamp(); OM.sfx('click'); }
+    if (IN.kp.KeyD) { sp.s += step; clamp(); OM.sfx('click'); }
+    if (IN.kp.KeyR) { sp.f = sp.s = 0; OM.sfx('click'); }
+    const dx = IN.mx - S.x, dy = IN.my - S.y, inside = dx * dx + dy * dy <= (S.r + 3) * (S.r + 3);
+    if (inside) {
+      OM.G.cursor = 'grab';
+      OM.G.tooltip(S.x - 60, L.bottom.y - 62, 'EFECTO', 'Clic en la blanca: arriba = {m}seguimiento{/}, abajo = {c}retroceso{/}, lados = efecto en banda. Clic derecho o R: centro. Teclas W A S D.', 'r');
+      if (IN.rpressed) { sp.f = sp.s = 0; OM.sfx('click'); }
+      if (IN.down && !T.charging) { sp.s = dx / S.r; sp.f = -dy / S.r; clamp(); IN.consumed = true; }
+      if (IN.released) { OM.sfx('click'); IN.consumed = true; }
+    }
+    return inside;
+  }
+  function drawSpin(ctx, t) {
+    const S = SPIN_UI, sp = T.spin, P = OM.PAL;
+    ctx.fillStyle = P['1']; ctx.beginPath(); ctx.arc(S.x, S.y, S.r + 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P['7']; ctx.beginPath(); ctx.arc(S.x, S.y, S.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P['8']; ctx.beginPath(); ctx.arc(S.x - 4, S.y - 5, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P['6']; ctx.fillRect(S.x - S.r + 2, S.y, S.r * 2 - 4, 1); ctx.fillRect(S.x, S.y - S.r + 2, 1, S.r * 2 - 4);
+    const px = Math.round(S.x + sp.s * (S.r - 3)), py = Math.round(S.y - sp.f * (S.r - 3));
+    const col = sp.f > 0.05 ? 'm' : sp.f < -0.05 ? 'c' : sp.s ? 'q' : 'b';
+    ctx.fillStyle = P['0']; ctx.fillRect(px - 3, py - 2, 7, 5); ctx.fillRect(px - 2, py - 3, 5, 7);
+    ctx.fillStyle = P[col]; ctx.fillRect(px - 2, py - 1, 5, 3); ctx.fillRect(px - 1, py - 2, 3, 5);
+    const lbl = sp.f > 0.05 ? 'SEGUIR' : sp.f < -0.05 ? 'RETRO' : sp.s ? 'LADO' : 'CENTRO';
+    OM.FONT.draw(ctx, lbl, S.x - S.r - 6, S.y - 4, { color: col === 'b' ? '6' : col, align: 'right' });
+  }
+
   function updateAim(dt) {
     const IN = OM.IN, c = cueBall(), R = OM.R;
     const M = OM.Run.mods(R);
+    if (!T.charging) updateSpin();
     if (!T.charging) {
       if (IN.kp.ArrowLeft || IN.kp.ArrowRight || IN.keys.ArrowLeft || IN.keys.ArrowRight) {
         const sp = IN.keys.ShiftLeft || IN.keys.ShiftRight ? 0.03 : 0.004;
@@ -219,12 +257,13 @@ OM.SCENES = OM.SCENES || {};
     const R = OM.R, c = cueBall(), M = OM.Run.mods(R);
     const pw = T.strikePow;
     const v = (60 + Math.pow(pw, 1.25) * 960) * M.powerMul;
-    OM.Physics.shoot(T.W, c, T.angle, v);
+    OM.Physics.shoot(T.W, c, T.angle, v, T.spin);
     OM.sfx('cue_hit', { vol: 0.4 + pw * 0.6 });
     OM.FX.burst(c.x - Math.cos(T.angle) * 6, c.y - Math.sin(T.angle) * 6, 'dust', 4 + Math.round(pw * 8));
     if (pw > 0.85) OM.FX.shake(2, 0.15);
     T.cur = {
       pocketed: [], scratch: false, cueContacts: new Set(), cueCushions: 0, banked: new Set(), eight: false,
+      spun: Math.hypot(T.spin.f, T.spin.s) > 0.2,
       isBreak: T.W.balls.filter((b) => b.alive && b.num !== 0).length === R.balls.length && T.shotIndex === 0,
     };
     T._lastRemaining = null;
@@ -295,7 +334,7 @@ OM.SCENES = OM.SCENES || {};
     T.shots--;
     const shot = {
       balls: cur.pocketed, scratch: cur.scratch, cueContacts: cur.cueContacts.size, cueCushions: cur.cueCushions,
-      shotIndex: T.shotIndex, shotsLeft: T.shots, isBreak: cur.isBreak, ballsLeft: remainingObj, cursed, clear,
+      shotIndex: T.shotIndex, shotsLeft: T.shots, isBreak: cur.isBreak, ballsLeft: remainingObj, cursed, clear, streak: T.streak, spun: cur.spun,
     };
     const S = OM.Run.score(R, shot);
     T.S = S;
@@ -385,6 +424,14 @@ OM.SCENES = OM.SCENES || {};
     });
     if (T.boss === 'verdugo' && cur.scratch) { T.shots = Math.max(0, T.shots - 1); OM.FX.popText(100, 200, '-1 TIRO', 'b', { size: 2 }); }
     T.shotIndex++;
+    T.streak = S.total > 0 ? T.streak + 1 : 0;
+    if (T.streak > (OM.META.maxStreak || 0)) { OM.META.maxStreak = T.streak; OM.saveMeta(); }
+    // Segunda Oportunidad: el primer tiro fallido de la mesa no gasta tiro
+    if (!T.refunded && !cur.pocketed.length && !cur.scratch && OM.Run.mods(R).refundMiss && T.shots >= 0) {
+      T.refunded = true; T.shots++;
+      const J = R.jokers.find((j) => j.id === 'segunda'); if (J) OM.HUD.bump(J.uid);
+      OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2, '¡TIRO RECUPERADO!', 'm', { size: 2 }); OM.sfx('level_up');
+    }
     // la 8 maldita vuelve al punto
     if (S.cursed !== undefined && cur.eight && T.W.balls.some((b) => b.alive && b.num !== 0)) {
       const e = T.W.balls.find((b) => b.num === 8);
@@ -417,6 +464,7 @@ OM.SCENES = OM.SCENES || {};
     const R = OM.R;
     T.phase = 'won';
     R.stats.tables++;
+    if (T.boss) { OM.META.bosses = (OM.META.bosses || 0) + 1; OM.saveMeta(); }
     R.jokers.forEach((J) => J.def.onTableEnd && J.def.onTableEnd(R, J));
     OM.sfx('win_table');
     OM.FX.burst(F.x + F.w / 2, F.y + F.h / 2, 'gold', 40);
@@ -466,14 +514,14 @@ OM.SCENES = OM.SCENES || {};
     // guía + taco
     if (c && c.alive && (T.phase === 'aim' || T.phase === 'strike') && !T.paused) {
       const g = T.guide;
-      const tr = OM.Physics.trace(W, c, T.angle, g >= 2 ? 2 : 0, g >= 2 ? 900 : 380);
+      const tr = g > 0 ? OM.Physics.trace(W, c, T.angle, g >= 2 ? 2 : 0, g >= 2 ? 900 : 380, T.spin.f) : { pts: [], ghost: null };
       const opts = {};
       if (tr.ghost) {
-        const ol = (g >= 2 ? 90 : 34) * Math.max(0.25, tr.objDir.k), cl = (g >= 2 ? 60 : 22) * tr.cueDir.k;
+        const ol = (g >= 2 ? 90 : 34) * Math.max(0.25, tr.objDir.k), cl = (g >= 2 ? 60 : 30) * tr.cueDir.k;
         opts.objPath = [{ x: tr.target.x, y: tr.target.y }, { x: tr.target.x + tr.objDir.x * ol, y: tr.target.y + tr.objDir.y * ol }];
         if (cl > 3) opts.cuePath = [{ x: tr.ghost.x, y: tr.ghost.y }, { x: tr.ghost.x + tr.cueDir.x * cl, y: tr.ghost.y + tr.cueDir.y * cl }];
       }
-      OM.TABLE.drawAim(ctx, tr.pts, tr.ghost, t, opts);
+      if (g > 0) OM.TABLE.drawAim(ctx, tr.pts, tr.ghost, t, opts);
       const pull = T.phase === 'strike' ? -2 + (T.strike / 0.08) * (4 + T.strikePow * 26) : 4 + T.power * 26;
       OM.TABLE.drawCue(ctx, R.cue, c.x - Math.cos(T.angle) * (c.r + 1), c.y - Math.sin(T.angle) * (c.r + 1), T.angle, pull, t);
     }
@@ -491,11 +539,11 @@ OM.SCENES = OM.SCENES || {};
       title: (T.boss ? OM.bossDef(T.boss).name : OM.TABLE_KINDS[R.tableIdx].name).toUpperCase(),
       bossId: T.boss, target: T.target, score: T.score, scoreShown: T.scoreShown,
       sub: T.boss ? null : 'Recompensa: $' + OM.TABLE_KINDS[R.tableIdx].reward,
-      shotName: T.shotName || (T.phase === 'aim' ? 'apunta...' : ''), shotColor: T.shotName ? T.shotColor : '5',
+      shotName: T.shotName || (T.phase === 'aim' ? (T.streak ? 'RACHA x' + (T.streak + 1) + ' · +' + Math.min(8, T.streak) + ' Mult' : 'apunta...') : ''), shotColor: T.shotName ? T.shotColor : T.streak ? 'v' : '5',
       chips: T.chips, mult: T.mult, multStr, bump: T.bump, shots: T.shots,
       buttons(y) {
         if (G.button(L.panel.x + 8, y, 80, 16, 'BOLAS', 'blue')) { T.showBalls = true; }
-        if (G.button(L.panel.x + 92, y, 80, 16, 'MENÚ', 'dark')) { T.paused = true; }
+        if (G.button(L.panel.x + 92, y, 80, 16, 'MENÚ', 'dark', T.phase === 'lost')) { T.paused = true; }
       },
     });
     const ui = T.phase === 'aim' || T.phase === 'place';
@@ -509,12 +557,14 @@ OM.SCENES = OM.SCENES || {};
       OM.FONT.draw(ctx, Math.round((T.phase === 'strike' ? T.strikePow : T.power) * 100) + '%', B.x + 372, B.y + 12, { color: '8' });
     } else {
       let hint = '';
-      if (T.phase === 'place') hint = T.placeAny ? 'BOLA EN MANO · haz clic para colocar la blanca' : 'SAQUE · coloca la blanca detrás de la línea y haz clic';
-      else if (T.phase === 'aim') hint = 'Apunta con el ratón · mantén pulsado y arrastra hacia atrás · suelta para tirar';
+      const hx = B.x + (B.w - 84) / 2;
+      if (T.phase === 'place') hint = T.placeAny ? 'BOLA EN MANO · clic para colocar la blanca' : 'SAQUE · coloca la blanca tras la línea y haz clic';
+      else if (T.phase === 'aim') hint = 'Apunta · mantén pulsado, arrastra atrás y suelta';
       else if (T.phase === 'rolling') hint = '...';
-      if (hint) OM.FONT.draw(ctx, hint, B.x + B.w / 2, B.y + 12, { color: '6', align: 'center' });
-      if (T.phase === 'aim') OM.FONT.draw(ctx, '← → / rueda: ajuste fino · Espacio: potencia · ESC: menú', B.x + B.w / 2, B.y + 24, { color: '4', align: 'center' });
+      if (hint) OM.FONT.draw(ctx, hint, hx, B.y + 12, { color: '6', align: 'center' });
+      if (T.phase === 'aim') OM.FONT.draw(ctx, '← → / rueda: ajuste · Espacio: potencia · WASD: efecto', hx, B.y + 24, { color: '4', align: 'center' });
     }
+    if (T.phase === 'aim' || T.phase === 'place' || T.charging || T.phase === 'strike') drawSpin(ctx, t);
     // intro de mesa
     if (T.intro > 0) {
       const a = Math.min(1, T.intro * 1.5);
@@ -534,14 +584,24 @@ OM.SCENES = OM.SCENES || {};
     }
     // overlays
     if (T.phase === 'won') drawCashout(ctx, t);
-    if (T.phase === 'lost') {
-      const a = Math.min(1, (1.8 - T.endT));
-      ctx.globalAlpha = a * 0.6; ctx.fillStyle = OM.PAL['9']; ctx.fillRect(0, 0, OM.W, OM.H); ctx.globalAlpha = 1;
-      OM.FONT.draw(ctx, 'SIN TIROS', L.felt.x + L.felt.w / 2, 170, { color: 'c', size: 2, align: 'center', shadow: '0', wave: 2, t });
-    }
+    if (T.phase === 'lost') drawLost(ctx, t);
     if (T.showBalls) OM.HUD.drawBallsView(ctx, R, t, () => (T.showBalls = false));
     if (OM.HUD.picker) OM.HUD.drawPicker(ctx, R, t);
     if (T.paused) OM.drawPause(ctx, t, () => (T.paused = false));
+  }
+
+  // derrota: overlay con botón claro; se sale a 'gameover' una sola vez
+  function drawLost(ctx, t) {
+    const G = OM.G, a = Math.min(1, 1.8 - T.endT);
+    ctx.globalAlpha = a * 0.7; ctx.fillStyle = OM.PAL['9']; ctx.fillRect(0, 0, OM.W, OM.H); ctx.globalAlpha = 1;
+    const cx = L.felt.x + L.felt.w / 2, w = 240, h = 92, x = cx - w / 2, y = 132;
+    ctx.globalAlpha = a; OM.UI.panel(ctx, x, y, w, h, 'blood'); ctx.globalAlpha = 1;
+    OM.FONT.draw(ctx, 'SIN TIROS', cx, y + 10, { color: 'c', size: 2, align: 'center', shadow: '0', wave: 2, t });
+    OM.FONT.draw(ctx, OM.fmt(T.score) + ' / ' + OM.fmt(T.target), cx, y + 36, { color: '7', align: 'center' });
+    if (T.endT < 1 && !T.leaving && G.button(cx - 70, y + h - 30, 140, 20, 'VER RESULTADOS', 'red', false, 'Enter')) {
+      T.leaving = true;
+      OM.go('gameover', { reason: 'score', score: T.score, target: T.target, silent: true });
+    }
   }
 
   function drawCashout(ctx, t) {

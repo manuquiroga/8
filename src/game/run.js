@@ -19,12 +19,21 @@ OM.bossDef = (id) => OM.BOSSES.find((j) => j.id === id);
 OM.cueDef = (id) => OM.CUES.find((j) => j.id === id);
 
 OM.Run = (function () {
-  function newJoker(id) {
+  function newJoker(id, edition) {
     const def = OM.jokerDef(id);
     const r = OM.RARITY[def.rarity];
-    const price = Math.round((r.price[0] + r.price[1]) / 2);
-    return { id, def, st: def.state ? def.state() : {}, price, uid: Math.random().toString(36).slice(2) };
+    let price = Math.round((r.price[0] + r.price[1]) / 2);
+    if (edition && OM.EDITIONS[edition]) price += OM.EDITIONS[edition].price;
+    return { id, def, st: def.state ? def.state() : {}, price, edition: edition || null, uid: Math.random().toString(36).slice(2) };
   }
+  function rollEdition(rng) {
+    let r = rng();
+    for (const [k, e] of Object.entries(OM.EDITIONS)) { if ((r -= e.chance) < 0) return k; }
+    return null;
+  }
+  // huecos de comodín efectivos (los Negativos no ocupan hueco)
+  function slots(R) { return R.jokerSlots + R.jokers.filter((J) => J.edition === 'negativo').length; }
+  function jokersFull(R) { return R.jokers.length >= slots(R); }
 
   function create(cueId, seed) {
     seed = seed == null ? Math.floor(Math.random() * 1e9) : seed;
@@ -75,7 +84,7 @@ OM.Run = (function () {
     return J;
   }
   function mods(R) {
-    const m = { extraShots: 0, pocketMul: 1, powerMul: 1, guide: 1, noScratch: false, eightSafe: false, scratchScores: false, retriggerFirst: false };
+    const m = { extraShots: 0, pocketMul: 1, powerMul: 1, guide: 1, pocketPull: 1, noScratch: false, eightSafe: false, scratchScores: false, retriggerFirst: false, refundMiss: false };
     R.jokers.forEach((_, i) => {
       const J = resolve(R, i); if (!J || !J.def.mods) return;
       const d = J.def.mods;
@@ -83,7 +92,8 @@ OM.Run = (function () {
       if (d.pocketMul) m.pocketMul *= d.pocketMul;
       if (d.powerMul) m.powerMul *= d.powerMul;
       if (d.guide) m.guide = Math.max(m.guide, d.guide);
-      ['noScratch', 'eightSafe', 'scratchScores', 'retriggerFirst'].forEach((k) => { if (d[k]) m[k] = true; });
+      if (d.pocketPull) m.pocketPull *= d.pocketPull;
+      ['noScratch', 'eightSafe', 'scratchScores', 'retriggerFirst', 'refundMiss'].forEach((k) => { if (d[k]) m[k] = true; });
     });
     return m;
   }
@@ -125,6 +135,7 @@ OM.Run = (function () {
     }
     let counted = shot.balls.slice();
     if (bossId_ === 'coleccionista') counted = counted.filter((b) => b.ball.num >= 9 || (b.ball.num === 8 && shot.clear));
+    if (bossId_ === 'purista') counted = counted.filter((b) => b.ball.num <= 7 || (b.ball.num === 8 && shot.clear));
     S.balls = counted;
     const n = counted.length;
     if (!n) { ev.push({ k: 'msg', v: 'FALLO', color: '6' }); S.total = 0; return S; }
@@ -134,6 +145,11 @@ OM.Run = (function () {
     S.chips = T.chips + T.lvlChips * (lvl - 1);
     S.mult = T.mult + T.lvlMult * (lvl - 1);
     ev.push({ k: 'type', v: typeId, lvl, chips: S.chips, mult: S.mult });
+    // RACHA (v1.1): cada tiro anterior seguido que embocó suma +1 Mult (máx. +8)
+    if (shot.streak > 0) {
+      ev.push({ k: 'msg', v: 'RACHA x' + (shot.streak + 1), color: 'v' });
+      S.add({ mult: Math.min(8, shot.streak) });
+    }
 
     counted.forEach((b, idx) => {
       const reps = idx === 0 && M.retriggerFirst ? 2 : 1;
@@ -157,6 +173,12 @@ OM.Run = (function () {
       }
     });
     callJ('onShot');
+    // ediciones: se aplican tras los comodines, de izquierda a derecha
+    R.jokers.forEach((J) => {
+      if (J.edition === 'foil') S.add({ chips: 50 }, J);
+      else if (J.edition === 'holo') S.add({ mult: 10 }, J);
+      else if (J.edition === 'poli') S.add({ xmult: 1.5 }, J);
+    });
     if (bossId_ === 'sanguijuela') ev.push({ k: 'money', v: -1, src: { type: 'boss' } });
     S.total = Math.floor(S.chips * S.mult);
     return S;
@@ -191,10 +213,10 @@ OM.Run = (function () {
     const owned = new Set(R.jokers.map((j) => j.id).concat(exclude));
     for (let tries = 0; tries < 30; tries++) {
       const rar = rollRarity(R.rng, allowLegend);
-      const pool = OM.JOKERS.filter((j) => j.rarity === rar && !owned.has(j.id));
+      const pool = OM.JOKERS.filter((j) => j.rarity === rar && !owned.has(j.id) && OM.isUnlocked(j.unlock));
       if (pool.length) return R.rng.pick(pool).id;
     }
-    const pool = OM.JOKERS.filter((j) => j.rarity !== 'legendario' && !owned.has(j.id));
+    const pool = OM.JOKERS.filter((j) => j.rarity !== 'legendario' && !owned.has(j.id) && OM.isUnlocked(j.unlock));
     return pool.length ? R.rng.pick(pool).id : null;
   }
   function randomItem(R, kind) {
@@ -208,7 +230,7 @@ OM.Run = (function () {
     const ex = [];
     for (let i = 0; i < 2; i++) {
       const id = randomJoker(R, false, ex); if (!id) continue; ex.push(id);
-      const J = newJoker(id);
+      const J = newJoker(id, rollEdition(R.rng));
       slots.push({ type: 'joker', id, J, price: J.price });
     }
     const items = [];
@@ -229,7 +251,7 @@ OM.Run = (function () {
     const opts = [];
     if (kind === 'maldito') {
       const ex = [];
-      for (let i = 0; i < 3; i++) { const id = randomJoker(R, true, ex); if (id) { ex.push(id); opts.push({ type: 'joker', id, J: newJoker(id) }); } }
+      for (let i = 0; i < 3; i++) { const id = randomJoker(R, true, ex); if (id) { ex.push(id); opts.push({ type: 'joker', id, J: newJoker(id, rollEdition(R.rng)) }); } }
     } else {
       const ex = new Set();
       for (let i = 0; i < 3; i++) {
@@ -241,5 +263,27 @@ OM.Run = (function () {
     return opts;
   }
 
-  return { create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker };
+  // ---- GUARDADO (v1.1) ----
+  // Se guarda al entrar en mapa/tienda/mesa. Una mesa abandonada a medias se rejuega desde el principio.
+  function serialize(R, scene, extra) {
+    const o = Object.assign({}, R, {
+      rngState: R.rng.state(),
+      jokers: R.jokers.map((J) => ({ id: J.id, st: J.st, price: J.price, edition: J.edition, uid: J.uid })),
+      scene, extra: extra || null, v: 1,
+    });
+    delete o.rng;
+    return JSON.stringify(o);
+  }
+  function deserialize(str) {
+    const o = JSON.parse(str);
+    if (!o || o.v !== 1 || !OM.cueDef(o.cue)) return null;
+    const R = Object.assign({}, o);
+    R.rng = OM.RNG(o.rngState);
+    R.jokers = o.jokers.filter((j) => OM.jokerDef(j.id)).map((j) => Object.assign(newJoker(j.id, j.edition), { st: j.st, price: j.price, uid: j.uid }));
+    // las bolas se restauran por valor; los bosses/niveles/stats son datos planos
+    delete R.rngState; delete R.scene; delete R.extra; delete R.v;
+    return { R, scene: o.scene, extra: o.extra };
+  }
+
+  return { create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker, rollEdition, slots, jokersFull, serialize, deserialize };
 })();
