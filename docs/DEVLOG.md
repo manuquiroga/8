@@ -102,3 +102,33 @@
 
 **Curva**: con más contenido el juego era más fácil (medio 7%). Objetivos IV-VI a 2.500 / 5.100 / 9.800 → victorias flojo 0,9%, medio 6,2%, bueno 17,7%.
 - Arte en `src/art/cards_art_v13.js`; hoja de contacto en `tools/preview_v13.html`.
+
+## 2026-11-16 · v2.0 — Bola 9 (cambio de mecánica)
+**Problema (playtest)**: "no estoy jugando pool: saco siempre igual y fuerte, meto una bola y gané". Las reglas de v1.x no premiaban la posición: siempre se podía tirar a la bola más fácil.
+**Cambio**: bola 9 con vida. Reglas completas en el CHANGELOG. Decisiones de diseño:
+- Se gana metiendo la 9 legal. Los puntos dan dinero (botín) y curan con los tiros *brillantes* (los que superan la cuota). Así los comodines de puntaje siguen ayudando a sobrevivir.
+- La vida se reinicia en cada mesa: con vida persistente y unos 10 tiros por mesa, el bot medio no pasaba del Círculo II.
+- El juez de reglas vive en `OM.Run.judge` / `OM.Run.vitals` y lo comparten el juego y el bot.
+- Cuota (`OM.CIRCLES[].base`) calibrada al percentil 70 de los tiros que embocan en cada círculo (bot bueno): 300 / 3.000 / 6.500 / 13.000 / 22.000 / 45.000, con x1.4 en Mayor y x1.8 en Jefe. La potencia de los comodines crece mucho más rápido que en v1 porque hay unos 10 tiros por mesa.
+- Bot (`tools/bot.js`): modelo de tiro nuevo (falta, fallo y nº de bolas por skill, layout, troneras y jefe), con las reglas reales. Flags `--seguidas` (3 faltas seguidas) y `--tacada N`.
+
+**Medido con el bot (6000 partidas)**:
+- Base de vida: con 5, el bot bueno gana el 0,6%; con 7, el 3%. Elegida: 7.
+- Pérdidas de mesa: 61% por quedarse sin vida y 39% por las 3 faltas (con un 9% de faltas por tiro).
+- Comodines rotos encontrados: Vampiro (aportaba 92% de los puntos), Codicia (68%) y Reloj de Arena con 7 vidas. Corregidos.
+- La Boca: 8% → 54% (troneras 0,62 → 0,75; el bot además contaba el castigo dos veces).
+- Resultado: bot bueno gana el 17%, medio el 0,2%, flojo el 0%. Los comodines que más avance dan son los de pool: el Barquero, Imán, Ojo de Cuervo, Mano Negra, Segunda Oportunidad y Fantasma.
+- Pendiente: el bot no mide física. Hay que validar con partidas humanas la tasa real de fallo en bola 9 y si las 3 faltas deben contarse seguidas.
+
+## 2026-11-16 · v3.0 — Pool arcade 1v1 (cambio de dirección)
+**Por qué**: el playtest pedía jugar pool de verdad contra alguien. Se conserva el arte, la mesa, el audio y la idea de comodines.
+**Decisiones**
+- La serie se gana por puntos, no al mejor de 5: así cada tiro vistoso cuenta y siempre se puede remontar. La victoria de partida vale entre 1.000 y 3.000 para que ganar siga importando.
+- Draft gratis en vez de tienda: nada de dinero ni menús largos entre partidas de un 1v1.
+- Las reglas (`OM.Match`) no dibujan ni leen entrada: las usan la escena, los bots y `tools/simtest.js`.
+- Online: el que tira manda mandos + estado final. Física de paso fijo para que los dos vean lo mismo.
+**Medido con `tools/simtest.js`** (series bot contra bot)
+- Acierto por tiro: fácil ~25%, medio ~40%, difícil ~55%. Difícil gana 12/12 series a fácil; medio gana 12/12 a fácil.
+- Saque: 0,7-0,9 bolas por saque, blanca dentro 0-7%. Unas 22-30 tiros por partida.
+- El primer reparto de puntos dejaba la victoria de partida (400-1.000) en nada frente a los combos; se subió a 1.000-3.000.
+**Pendiente**: los bots no usan efecto ni elevación; el balance de comodines está sin validar con humanos; el online no reconecta.

@@ -1,9 +1,10 @@
-// Playtest automatizado: node tools/playtest.js [outdir]
-// Recorre título → taco → mapa → mesa (tira varios golpes) → captura cada escena y reporta errores.
-const { chromium } = require('playwright');
+// Playtest automatizado: node tools/playtest.js [outdir] [partidas=1]
+// Recorre título → preparación → draft → mesa (el jugador humano tira al azar contra el bot) y captura cada escena.
+// Necesita playwright (PLAYWRIGHT=/ruta/a/node_modules/playwright si no está instalado aquí).
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const path = require('path');
 (async () => {
-  const out = process.argv[2] || '/tmp';
+  const out = process.argv[2] || '/tmp', matches = +process.argv[3] || 1;
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 })).newPage();
   const errs = [];
@@ -12,41 +13,49 @@ const path = require('path');
   await page.goto('file://' + path.resolve(__dirname, '../index.html'));
   const shot = async (n) => { await page.screenshot({ path: path.join(out, n + '.png') }); };
   const click = async (x, y) => { await page.mouse.move(x * 2, y * 2); await page.mouse.down(); await page.waitForTimeout(40); await page.mouse.up(); await page.waitForTimeout(80); };
+  const st = () => page.evaluate(() => ({ scene: OM.sceneName, phase: OM.dbg() && OM.dbg().phase, turn: OM.S && OM.S.M ? OM.S.M.turn : -1, err: OM.lastError || null }));
   await page.waitForTimeout(1500); await shot('01_title');
-  await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('02_cues');
-  await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('03_map');
-  await page.keyboard.press('Enter'); await page.waitForTimeout(1200); await shot('04_table_intro'); await page.evaluate(() => { OM.dbg().T.target = 40; });
-  await page.waitForTimeout(1200);
-  // colocar blanca
-  await click(250, 190); await page.waitForTimeout(300);
-  // tirar varios golpes hacia la bola más cercana
-  for (let s = 0; s < 6; s++) {
-    const st = await page.evaluate(() => OM.sceneName);
-    if (st !== 'table') break;
-    const tgt = await page.evaluate(() => {
-      const W = OM._T && OM._T.W; return null;
-    });
-    // apuntar hacia el centro del triángulo/alguna bola
-    const aim = await page.evaluate(() => {
-      const balls = (OM.dbg && OM.dbg().balls) || [];
-      const c = balls.find((b) => b.num === 0), o = balls.filter((b) => b.num !== 0 && b.alive);
-      if (!c || !o.length) return null;
-      const t = o[Math.floor(Math.random() * o.length)];
-      return { cx: c.x, cy: c.y, tx: t.x, ty: t.y, phase: OM.dbg().phase };
-    });
-    if (!aim) break;
-    if (aim.phase === 'place') { await click(250, 190); await page.waitForTimeout(200); continue; }
-    await page.mouse.move(aim.tx * 2, aim.ty * 2); await page.waitForTimeout(100);
-    if (s === 0) await shot('05_aim');
-    await page.mouse.down();
-    const dx = aim.tx - aim.cx, dy = aim.ty - aim.cy, d = Math.hypot(dx, dy);
-    await page.mouse.move((aim.tx - dx / d * 70) * 2, (aim.ty - dy / d * 70) * 2, { steps: 5 });
-    if (s === 0) await shot('06_charge');
-    await page.mouse.up();
-    await page.waitForTimeout(700); if (s === 0) await shot('07_rolling');
-    for (let k = 0; k < 40; k++) { const ph = await page.evaluate(() => OM.dbg && OM.dbg().phase); if (ph === 'aim' || ph === 'place' || ph === 'won' || ph === 'lost') break; if (ph === 'scoring' && k % 6 === 0) await shot('08_scoring_' + s + '_' + k); await page.waitForTimeout(250); }
+  await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('02_setup');
+  await page.keyboard.press('Enter'); await page.waitForTimeout(1600); await shot('03_draft');
+  if (process.env.START) { await page.evaluate((i) => { OM.S.matchIdx = i; OM.go('draft'); }, +process.env.START); await page.waitForTimeout(1500); }
+  for (let m = 0; m < matches; m++) {
+    await page.keyboard.press('Digit1'); await page.waitForTimeout(3200); await shot(`m${m}_04_intro`);
+    await page.keyboard.press('Enter'); await page.waitForTimeout(600);
+    let shots = 0, shotAim = false;
+    for (let k = 0; k < 2400; k++) {
+      const s = await st();
+      if (s.err) { errs.push('OM.lastError: ' + s.err); break; }
+      if (s.scene !== 'table') break;
+      if (s.phase === 'end') { await page.waitForTimeout(2500); await shot(`m${m}_09_end`); await page.keyboard.press('Enter'); await page.waitForTimeout(1500); break; }
+      if (s.turn === 0 && s.phase === 'place') { await click(250 + Math.random() * 40, 150 + Math.random() * 80); continue; }
+      if (s.turn === 0 && s.phase === 'aim') {
+        // dispara a una bola legal al azar (acelerado: usa las acciones del juego con el teclado/ratón reales)
+        const aim = await page.evaluate(() => {
+          const T = OM.dbg().T, c = T.W.balls.find((b) => b.num === 0);
+          const o = T.W.balls.filter((b) => b.alive && b.num && OM.Match.legalFirst(OM.S, T.W, b.num));
+          const t = o[Math.floor(Math.random() * o.length)] || { x: 400, y: 190 };
+          return { cx: c.x, cy: c.y, tx: t.x, ty: t.y };
+        });
+        if (shots % 3 === 1) { await page.keyboard.press('KeyE'); await page.keyboard.press('KeyE'); await page.keyboard.press('KeyE'); await page.keyboard.press('KeyD'); await page.keyboard.press('KeyD'); }
+        if (shots % 5 === 3) { for (let i = 0; i < 6; i++) await page.keyboard.press('KeyE'); }
+        await page.mouse.move(aim.tx * 2, aim.ty * 2); await page.waitForTimeout(120);
+        if (!shotAim && shots === 1) { await shot(`m${m}_05_aim_masse`); shotAim = true; }
+        await page.mouse.down();
+        const dx = aim.tx - aim.cx, dy = aim.ty - aim.cy, d = Math.hypot(dx, dy) || 1;
+        await page.mouse.move((aim.tx - dx / d * 75) * 2, (aim.ty - dy / d * 75) * 2, { steps: 4 });
+        if (shots === 0) await shot(`m${m}_06_charge`);
+        await page.mouse.up(); shots++;
+        await page.waitForTimeout(500); if (shots === 1) await shot(`m${m}_07_rolling`);
+        continue;
+      }
+      if (s.phase === 'scoring' && k % 9 === 0 && shots < 6) await shot(`m${m}_08_scoring_${k}`);
+      await page.waitForTimeout(200);
+    }
+    const s = await st();
+    console.log('partida', m + 1, 'tiros del jugador', shots, '→ escena', s.scene, await page.evaluate(() => OM.S.players.map((p) => p.name + ' ' + p.points + 'pts ' + p.wins + 'w').join(' | ')));
+    if (s.scene === 'draft') { await page.waitForTimeout(800); await shot(`m${m}_10_draft`); }
+    if (s.scene === 'final') { await page.waitForTimeout(800); await shot('11_final'); break; }
   }
-  await shot('09_after');
   console.log(errs.length ? errs.join('\n') : 'sin errores');
   await browser.close();
 })();

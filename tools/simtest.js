@@ -1,43 +1,66 @@
-// Prueba headless de física y puntuación: node tools/simtest.js
+// Prueba headless: series completas bot contra bot con las reglas y la física reales.
+//   node tools/simtest.js [series=20] [nivelA=medio] [nivelB=medio] [modo=8|9|mix]
+// Sirve para comprobar que nada revienta y para medir balance (quién gana, puntos, tiros por partida, saque).
 global.window = global; global.document = { createElement: () => ({ getContext: () => ({}) }) };
-require('../src/core/px.js'); require('../src/game/data.js'); require('../src/game/physics.js'); require('../src/game/run.js');
-const L = OM.LAYOUT, F = L.felt;
-function rackWorld() {
-  const W = OM.Physics.create({});
-  const d = 12.15, fx = F.x + F.w * 0.72, fy = F.y + F.h / 2; let n = 1;
-  for (let k = 0; k < 5; k++) for (let j = 0; j <= k; j++) OM.Physics.addBall(W, { num: n++, kind: 'normal', x: fx + k * d * 0.866 + (Math.random()-0.5)*0.3, y: fy + (j - k / 2) * d + (Math.random()-0.5)*0.3 });
-  const cue = OM.Physics.addBall(W, { num: 0, kind: 'normal', x: F.x + 70, y: fy + (Math.random() - 0.5) * 6 });
-  return { W, cue };
+['core/px.js', 'game/data.js', 'game/physics.js', 'game/match.js', 'game/ai.js'].forEach((f) => require('../src/' + f));
+const [N = '20', A = 'medio', B = 'medio', MODE = '8'] = process.argv.slice(2);
+const M = OM.Match, P = OM.Physics;
+
+function playShot(S, W, st) {
+  const lvl = S.players[S.M.turn].level;
+  const cue = M.cueBall(W);
+  if (S.M.inHand) {
+    if (!cue.alive) { cue.alive = true; cue.sinking = false; cue.sink = 0; }
+    const p = OM.AI.place(S, W, lvl); cue.x = p.x; cue.y = p.y; S.M.inHand = null;
+  }
+  let pl = OM.AI.plan(S, W, lvl), guard = 0;
+  while (pl.joker != null && guard++ < 4) {
+    const kind = M.useActive(S, S.M.turn, pl.joker);
+    if (kind === 'quake') {
+      const cur = M.freeCur();
+      P.quake(W, 260); P.run(W, 15, (e) => M.track(cur, e)); M.resolveQuake(S, W, cur); st.quakes++;
+      if (!cue.alive) { cue.alive = true; cue.sinking = false; }
+    }
+    if (S.M.inHand) { const p = OM.AI.place(S, W, lvl); cue.x = p.x; cue.y = p.y; S.M.inHand = null; }
+    pl = OM.AI.plan(S, W, lvl);
+  }
+  if (pl.joker != null) pl = { angle: 0, power: 0.5, spin: { f: 0, s: 0 }, elev: 0 };
+  const wasBreak = S.M.breakShot, who = S.M.turn;
+  const cur = M.beginShot(S, W, pl);
+  P.run(W, 30, (e) => M.track(cur, e));
+  if (P.moving(W)) st.stuck++;
+  const out = M.resolve(S, W, cur);
+  st.shots++; if (out.foul) st.fouls++; if (cur.pocketed.length) st.pots++;
+  if (wasBreak) { st.breaks++; st.breakBalls += cur.pocketed.length; if (cur.scratch) st.breakScratch++; }
+  st.byLevel[who].shots++; if (out.total > 0) st.byLevel[who].scoring++;
+  st.best = Math.max(st.best, out.total);
+  if (out.win == null) M.applyTurn(S, W);
+  return out;
 }
-let totPocket = 0, totTime = 0, scratches = 0; const N = 200;
-for (let i = 0; i < N; i++) {
-  const { W, cue } = rackWorld();
-  OM.Physics.shoot(W, cue, (Math.random() - 0.5) * 0.04, 60 + Math.pow(0.9 + Math.random() * 0.1, 1.25) * 960);
-  let t = 0, pk = 0, boosted = false;
-  while (OM.Physics.moving(W) && t < 30) { OM.Physics.step(W, 1 / 60); t += 1 / 60; for (const e of W.events) if (e.type === 'hit' && !boosted) { boosted = true; OM.Physics.breakBoost(W, cue, 0.95); } else if (e.type === 'pocket') { if (e.ball.num === 0) scratches++; else pk++; } W.events.length = 0; }
-  totPocket += pk; totTime += t;
+
+const st = { shots: 0, fouls: 0, pots: 0, breaks: 0, breakBalls: 0, breakScratch: 0, stuck: 0, quakes: 0, best: 0, byLevel: [{ shots: 0, scoring: 0 }, { shots: 0, scoring: 0 }] };
+const res = { wins: [0, 0], matches: [0, 0], pts: [0, 0], shotsPerMatch: [], early8: 0 };
+const t0 = Date.now();
+for (let s = 0; s < +N; s++) {
+  const S = M.newSeries({ seed: 1000 + s * 7919, mode: MODE, players: [{ name: 'A', kind: 'bot', level: A, cue: OM.CUES[s % OM.CUES.length].id }, { name: 'B', kind: 'bot', level: B, cue: OM.CUES[(s + 3) % OM.CUES.length].id }] });
+  for (let i = 0; i < S.n; i++) {
+    S.matchIdx = i;
+    [0, 1].forEach((pi) => M.pick(S, pi, OM.AI.draft(M.draftOffers(S, pi))));
+    M.startMatch(S);
+    const W = M.buildWorld(S);
+    let n = 0, out;
+    do { out = playShot(S, W, st); n++; } while (out.win == null && n < 400);
+    if (out.win == null) throw new Error('partida sin final, semilla ' + S.seed);
+    res.shotsPerMatch.push(n); res.matches[out.win]++;
+    if (S.M.end.reason) res.early8++;
+  }
+  const w = M.seriesWinner(S); res.wins[w]++; res.pts[0] += S.players[0].points; res.pts[1] += S.players[1].points;
 }
-console.log('saque: bolas/saque', (totPocket / N).toFixed(2), 'tiempo medio', (totTime / N).toFixed(2) + 's', 'faltas', scratches);
-// tiro recto a tronera esquina
-{
-  const W = OM.Physics.create({}); const p = W.pockets[5];
-  const b = OM.Physics.addBall(W, { num: 3, kind: 'normal', x: p.x - 60, y: p.y - 30 });
-  const cue = OM.Physics.addBall(W, { num: 0, kind: 'normal', x: p.x - 150, y: p.y - 75 });
-  OM.Physics.shoot(W, cue, Math.atan2(b.y - cue.y, b.x - cue.x), 400);
-  let t = 0, res = []; while (OM.Physics.moving(W) && t < 20) { OM.Physics.step(W, 1 / 60); t += 1 / 60; W.events.forEach((e) => e.type === 'pocket' && res.push(e.ball.num)); W.events.length = 0; }
-  console.log('tiro a esquina, embocadas:', res, 'pockets', W.pockets.map(p=>[p.x|0,p.y|0]).join(' '));
-}
-// puntuación
-const R = OM.Run.create('peregrino', 42);
-R.jokers.push(OM.Run.newJoker('tiza_azul'), OM.Run.newJoker('espejo_roto'), OM.Run.newJoker('doble_fondo'), OM.Run.newJoker('racha'));
-const pocket = { x: 0, y: 0, corner: true };
-const S = OM.Run.score(R, { balls: [{ ball: R.balls[8], pocket, banked: true }, { ball: R.balls[2], pocket, banked: false }], scratch: false, cueContacts: 2, cueCushions: 1, shotIndex: 0, shotsLeft: 4, isBreak: false, ballsLeft: 10 });
-console.log('doblete:', S.typeId, 'chips', S.chips, 'mult', S.mult, 'total', S.total, 'eventos', S.events.length);
-OM.Run.afterShot(R, S); console.log('racha st', R.jokers[3].st);
-console.log('objetivos', OM.CIRCLES.map((c, i) => [0, 1, 2].map((k) => OM.Run.target(R, i, k)).join('/')).join(' | '), 'inf', OM.Run.target(R, 6, 0));
-{
-  const { W, cue } = rackWorld();
-  OM.Physics.shoot(W, cue, 0, 1020);
-  for (let i = 0; i < 30; i++) { OM.Physics.step(W, 1 / 60); }
-  console.log('tras 0.5s velocidades:', W.balls.map((b) => Math.hypot(b.vx, b.vy) | 0).join(','));
-}
+const avg = (a) => (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1);
+console.log(`${N} series · ${A} vs ${B} · modo ${MODE} · ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+console.log('series ganadas   A/B:', res.wins.join(' / '));
+console.log('partidas ganadas A/B:', res.matches.join(' / '), '· perdidas por la 8:', res.early8);
+console.log('puntos medios    A/B:', Math.round(res.pts[0] / N), '/', Math.round(res.pts[1] / N), '· mejor tiro', st.best);
+console.log('tiros por partida:', avg(res.shotsPerMatch), '· % tiros que embocan', (100 * st.pots / st.shots).toFixed(0), '· % faltas', (100 * st.fouls / st.shots).toFixed(0));
+console.log('acierto A/B:', st.byLevel.map((b) => (100 * b.scoring / Math.max(1, b.shots)).toFixed(0) + '%').join(' / '));
+console.log('saque: bolas/saque', (st.breakBalls / st.breaks).toFixed(2), '· blanca dentro', (100 * st.breakScratch / st.breaks).toFixed(0) + '%', '· simulaciones cortadas', st.stuck, '· terremotos', st.quakes);

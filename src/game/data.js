@@ -1,256 +1,194 @@
-// 8 — datos de diseño: comodines, arcanos, lunas, tacos, jefes, círculos.
-// Los IDs son el contrato con el arte: cada comodín necesita el sprite `joker_<id>` (32x32),
-// cada consumible `item_<id>` (24x24), cada taco `cue_<id>`, cada jefe `boss_<id>` (32x32).
-// Hooks de comodín (todos opcionales):
-//   mods: {extraShots, pocketMul, powerMul, guide, noScratch, extraSlots}
-//   onBall(S, b, J)   — por cada bola embocada (b = {ball, pocket, banked, idx})
-//   onShot(S, J)      — tras puntuar las bolas del tiro
-//   onAfter(S, J)     — tras el tiro (actualizar contadores de escalado)
-//   onTableStart(R,J) / onTableEnd(R,J) / onScratch(S,J)
-// S.add({chips, mult, xmult, money}, J) emite eventos animados.
+// 8 — datos de diseño del pool arcade 1v1: comodines, tacos, obstáculos y puntos.
+// El arte se reutiliza: cada comodín usa el sprite `joker_<art || id>` (32x32), cada taco `cue_<art || id>`
+// y cada obstáculo la medalla `boss_<art || id>`.
+//
+// Hooks de comodín (todos opcionales). S = marcador del tiro (ver OM.Match.resolve):
+//   mods:  {pocketMul, pocketPull, powerMul, guide, guideLen, noScratch, trickMul, pointsMul, ...} en TU turno
+//   rival: {pocketMul, guide, shake} en el turno del RIVAL (trastadas)
+//   onBall(S, b)      — por cada bola TUYA embocada en un tiro legal. b = {num, pocket, banked, combo}
+//   onPot(S, b)       — por cada bola embocada en un tiro legal (también las del rival)
+//   onShot(S)         — tiro legal que emboca al menos una bola tuya
+//   onMiss(S)         — tiro legal que no emboca nada tuyo
+//   onFoul(S)         — tu falta
+//   onWinBall(S)      — metes la bola que gana la partida
+//   onRivalFoul(S) / onRivalBall(S, b) / onRivalGift(S, b)  — cuando tira el rival (S.addRival te da puntos a ti)
+//   onMatchStart(Ser, J)
+// S.add({pts, mult, xmult, steal}, this) emite eventos animados. `this` = la carta que se ilumina
+// (this.st = estado persistente de la serie, this.inst.used = gastado en esta partida).
+// S.cur = datos del tiro: {power, spun, elev, jumped (intentó saltar), hopped (nº de bolas que saltó), curved, kick, cueCushions, cueContacts, dist}
 window.OM = window.OM || {};
 
 OM.RARITY = {
-  comun:      { name: 'Común',      color: 'q', weight: 70, price: [4, 6] },
-  raro:       { name: 'Raro',       color: 'm', weight: 25, price: [6, 8] },
-  epico:      { name: 'Épico',      color: 'c', weight: 5,  price: [9, 11] },
-  legendario: { name: 'Legendario', color: 'h', weight: 0,  price: [14, 16] },
+  comun:      { name: 'Común',      color: 'q', weight: 60 },
+  raro:       { name: 'Raro',       color: 'm', weight: 30 },
+  epico:      { name: 'Épico',      color: 'c', weight: 8 },
+  legendario: { name: 'Legendario', color: 'h', weight: 2 },
 };
 
-const isSolid = (b) => b.num >= 1 && b.num <= 7;
-const isStripe = (b) => b.num >= 9 && b.num <= 15;
+// Puntos base del arcade. El total de un tiro es Puntos × Combo.
+OM.POINTS = {
+  ball: 100,        // bola tuya embocada
+  breakBall: 25,    // bola embocada en el saque (saque nerfeado: sin combos ni comodines)
+  bank: 50,         // la bola tocó banda antes de entrar
+  combo: 100,       // combinación: entra una bola que no es la que tocó la blanca
+  kick: 100,        // la blanca tocó banda antes de la primera bola
+  far: 50,          // tiro largo
+  trick: 150,       // embocar saltando una bola o con massé
+  finish: 500,      // la 8 (o la 9) que gana
+  foul: 50,         // lo que resta una falta
+  win: [1000, 1250, 1500, 2000, 3000], // por ganar cada partida de la serie
+  leftover: 100,    // paliza: por cada bola que le quedó al rival
+  clock: 30,        // segundos por tiro (El Reloj: 15)
+  multi: [1, 1, 2, 3, 5], // Combo base por nº de bolas tuyas en el tiro (4+ = x5)
+  streakCap: 5,
+};
+OM.MULTI_NAMES = ['', '¡DENTRO!', '¡DOBLE!', '¡TRIPLE!', '¡MASACRE!'];
+
+const isSolid = (n) => n >= 1 && n <= 7;
+const isStripe = (n) => n >= 9;
 
 OM.JOKERS = [
-  // ---------------- COMUNES ----------------
-  { id: 'tiza_azul', name: 'Tiza Azul', rarity: 'comun', desc: '+4 Mult en cada tiro que emboque.',
-    onShot(S) { if (S.balls.length) S.add({ mult: 4 }, this); } },
-  { id: 'taco_fresno', name: 'Taco de Fresno', rarity: 'comun', desc: '+40 Fichas en cada tiro que emboque.',
-    onShot(S) { if (S.balls.length) S.add({ chips: 40 }, this); } },
-  { id: 'lisas', name: 'Lisas Malditas', rarity: 'comun', desc: 'Cada bola LISA (1-7) embocada da +3 Mult.',
-    onBall(S, b) { if (isSolid(b.ball)) S.add({ mult: 3 }, this); } },
-  { id: 'rayadas', name: 'Rayadas Infames', rarity: 'comun', desc: 'Cada bola RAYADA (9-15) embocada da +30 Fichas.',
-    onBall(S, b) { if (isStripe(b.ball)) S.add({ chips: 30 }, this); } },
-  { id: 'primera_sangre', name: 'Primera Sangre', rarity: 'comun', desc: 'El primer tiro tras el saque: x2 Mult.',
-    onShot(S) { if (S.shotIndex === 0 && S.balls.length) S.add({ xmult: 2 }, this); } },
-  { id: 'ultimo_aliento', name: 'Último Aliento', rarity: 'comun', desc: 'El último tiro de la mesa: x3 Mult.',
-    onShot(S) { if (S.shotsLeft === 0 && S.balls.length) S.add({ xmult: 3 }, this); } },
-  { id: 'banda_sangrienta', name: 'Banda Sangrienta', rarity: 'comun', desc: 'Cada bola embocada tras tocar banda: +5 Mult.',
-    onBall(S, b) { if (b.banked) S.add({ mult: 5 }, this); } },
-  { id: 'carambolero', name: 'Carambolero', rarity: 'comun', desc: '+2 Mult por cada bola distinta que toque la blanca.',
-    onShot(S) { if (S.balls.length && S.cueContacts > 0) S.add({ mult: 2 * S.cueContacts }, this); } },
-  { id: 'usurero', name: 'Usurero', rarity: 'comun', desc: 'Gana $1 por cada tiro que emboque ($3 si son 2 o más bolas).',
-    onShot(S) { const n = S.balls.length; if (n) S.add({ money: n >= 2 ? 3 : 1 }, this); } },
-  { id: 'esquinero', name: 'Esquinero', rarity: 'comun', desc: 'Bolas en troneras de ESQUINA: +4 Mult.',
-    onBall(S, b) { if (b.pocket.corner) S.add({ mult: 4 }, this); } },
-  { id: 'murcielago', name: 'Murciélago', rarity: 'comun', desc: 'Bolas en troneras LATERALES: +60 Fichas.',
-    onBall(S, b) { if (!b.pocket.corner) S.add({ chips: 60 }, this); } },
-  { id: 'vela_negra', name: 'Vela Negra', rarity: 'comun', desc: '+1 Tiro en cada mesa.', mods: { extraShots: 1 } },
-  { id: 'iman', name: 'Imán Oxidado', rarity: 'comun', desc: 'Las troneras son un 18% más grandes.', mods: { pocketMul: 1.18 } },
-  // v1.1 — control y racha (no dependen de dobletes)
-  { id: 'eslabon', name: 'Eslabón', rarity: 'comun', desc: '+25 Fichas por cada nivel de RACHA.',
-    onShot(S) { if (S.balls.length && S.streak) S.add({ chips: 25 * S.streak }, this); } },
-  { id: 'limosna', name: 'Limosna', rarity: 'comun', desc: 'Cada tiro que FALLA te da $1.',
-    onShot(S) { if (!S.balls.length && !S.scratch) S.add({ money: 1 }, this); } },
-  { id: 'maestro_efecto', name: 'Maestro del Efecto', rarity: 'comun', desc: 'Tiros con efecto (retroceso, seguimiento o lateral): +5 Mult.',
-    onShot(S) { if (S.balls.length && S.spun) S.add({ mult: 5 }, this); } },
-  // v1.3 — más comunes
-  { id: 'paciente', name: 'El Paciente', rarity: 'comun', desc: '+3 Mult por cada tiro ya usado en esta mesa.',
-    onShot(S) { if (S.balls.length && S.shotIndex > 0) S.add({ mult: 3 * S.shotIndex }, this); } },
-  { id: 'diezmo', name: 'Diezmo', rarity: 'comun', desc: '+1 Mult por cada $5 que tengas.',
-    onShot(S) { const v = Math.floor(Math.max(0, S.R.money) / 5); if (S.balls.length && v) S.add({ mult: v }, this); } },
-  { id: 'barrendero', name: 'Barrendero', rarity: 'comun', desc: '+8 Fichas por cada bola que ya no esté en la mesa (este triángulo).',
-    onShot(S) { const v = Math.max(0, S.R.balls.length - (S.ballsLeft || 0)); if (S.balls.length && v) S.add({ chips: 8 * v }, this); } },
-  { id: 'pares', name: 'Pares Malditos', rarity: 'comun', desc: 'Cada bola de número PAR embocada (no la 8): +4 Mult.',
-    onBall(S, b) { if (b.ball.num % 2 === 0 && b.ball.num !== 8) S.add({ mult: 4 }, this); } },
+  // ---------------- COMUNES: puntos ----------------
+  { id: 'tiza_azul', name: 'Tiza Azul', rarity: 'comun', desc: '+1 Combo en cada tiro que emboque.',
+    onShot(S) { S.add({ mult: 1 }, this); } },
+  { id: 'mano_firme', art: 'taco_fresno', name: 'Mano Firme', rarity: 'comun', desc: '+40 Puntos por cada bola tuya embocada.',
+    onBall(S) { S.add({ pts: 40 }, this); } },
+  { id: 'bandolero', art: 'banda_sangrienta', name: 'Bandolero', rarity: 'comun', desc: 'Bola embocada DE BANDA: +150 Puntos y +1 Combo.',
+    onBall(S, b) { if (b.banked) S.add({ pts: 150, mult: 1 }, this); } },
+  { id: 'combinador', name: 'Combinador', rarity: 'comun', desc: 'Bola embocada por COMBINACIÓN: +150 Puntos y +1 Combo.',
+    onBall(S, b) { if (b.combo) S.add({ pts: 150, mult: 1 }, this); } },
+  { id: 'esquinero', name: 'Esquinero', rarity: 'comun', desc: 'Bolas en troneras de ESQUINA: +50 Puntos.',
+    onBall(S, b) { if (b.pocket.corner) S.add({ pts: 50 }, this); } },
+  { id: 'murcielago', name: 'Murciélago', rarity: 'comun', desc: 'Bolas en troneras LATERALES: +120 Puntos.',
+    onBall(S, b) { if (!b.pocket.corner) S.add({ pts: 120 }, this); } },
+  { id: 'primera_sangre', name: 'Primera Sangre', rarity: 'comun', desc: 'Tu primer tiro que emboque en cada partida: x3 Combo.',
+    onShot(S) { if (!this.inst.used) { this.inst.used = true; S.add({ xmult: 3 }, this); } } },
+  { id: 'maestro_efecto', name: 'Maestro del Efecto', rarity: 'comun', desc: 'Embocar con EFECTO: +100 Puntos.',
+    onShot(S) { if (S.cur.spun) S.add({ pts: 100 }, this); } },
+  { id: 'martillo', name: 'Martillo de Hueso', rarity: 'comun', desc: '+25% de potencia. Embocar a 85% de potencia o más: +150 Puntos.', mods: { powerMul: 1.25 },
+    onShot(S) { if (S.cur.power >= 0.85) S.add({ pts: 150 }, this); } },
+  { id: 'pulso', name: 'Pulso de Cirujano', rarity: 'comun', desc: 'Embocar a 35% de potencia o menos: +150 Puntos.',
+    onShot(S) { if (S.cur.power <= 0.35) S.add({ pts: 150 }, this); } },
+  { id: 'remontada', art: 'ultimo_aliento', name: 'Remontada', rarity: 'comun', desc: 'Mientras vayas PERDIENDO la serie en puntos: x1.5 Combo.',
+    onShot(S) { if (S.P.points < S.R.points) S.add({ xmult: 1.5 }, this); } },
+  { id: 'limosna', name: 'Limosna', rarity: 'comun', desc: 'Cada FALLO (sin falta) te da +60 Puntos.',
+    onMiss(S) { S.add({ pts: 60 }, this); } },
+  { id: 'carambolero', name: 'Carambolero', rarity: 'comun', desc: 'Al embocar: +40 Puntos por cada bola distinta que tocó la blanca.',
+    onShot(S) { if (S.cur.cueContacts > 0) S.add({ pts: 40 * S.cur.cueContacts }, this); } },
+  { id: 'francotirador', art: 'paciente', name: 'Francotirador', rarity: 'comun', desc: 'Embocar DE LEJOS (más de media mesa): +150 Puntos.',
+    onShot(S) { if (S.cur.dist > 200) S.add({ pts: 150 }, this); } },
+  { id: 'barrendero', name: 'Barrendero', rarity: 'comun', desc: 'Al embocar: +25 Puntos por cada bola tuya que ya no esté en la mesa.',
+    onShot(S) { if (S.cleared > 0) S.add({ pts: 25 * S.cleared }, this); } },
+  { id: 'eslabon', name: 'Eslabón', rarity: 'comun', desc: '+60 Puntos por cada nivel de TACADA.',
+    onShot(S) { if (S.streak) S.add({ pts: 60 * S.streak }, this); } },
+  { id: 'lisas', name: 'Devoto de las Lisas', rarity: 'comun', desc: 'Cada bola LISA (1-7) que emboques: +80 Puntos.',
+    onBall(S, b) { if (isSolid(b.num)) S.add({ pts: 80 }, this); } },
+  { id: 'rayadas', name: 'Devoto de las Rayadas', rarity: 'comun', desc: 'Cada bola RAYADA (9-15) que emboques: +80 Puntos.',
+    onBall(S, b) { if (isStripe(b.num)) S.add({ pts: 80 }, this); } },
+  { id: 'tercera', name: 'A la Tercera', rarity: 'comun', desc: 'Cada TERCERA bola que emboques en la partida: +300 Puntos. (Llevas {v})',
+    state: () => ({ v: 0 }),
+    onMatchStart(Ser, J) { J.st.v = 0; },
+    onBall(S) { this.st.v++; if (this.st.v % 3 === 0) S.add({ pts: 300 }, this); } },
+  { id: 'iman', name: 'Imán Oxidado', rarity: 'comun', desc: 'En tu turno las troneras son un 15% más grandes.', mods: { pocketMul: 1.15 } },
+  // ---------------- COMUNES: trastadas ----------------
+  { id: 'peaje', art: 'diezmo', name: 'Peaje', rarity: 'comun', desc: 'Cada FALTA del rival te da +200 Puntos.',
+    onRivalFoul(S) { S.addRival({ pts: 200 }, this); } },
+  { id: 'maldicion', art: 'pares', name: 'Maldición', rarity: 'comun', desc: 'Si el rival mete una bola TUYA: +250 Puntos para ti.',
+    onRivalGift(S) { S.addRival({ pts: 250 }, this); } },
+  { id: 'boca_chica', art: 'codicia', name: 'Boca Chica', rarity: 'comun', desc: 'En el turno del RIVAL las troneras son un 12% más chicas.', rival: { pocketMul: 0.88 } },
 
   // ---------------- RAROS ----------------
-  { id: 'racha', name: 'Racha Febril', rarity: 'raro', desc: 'Gana +2 Mult por cada tiro seguido que emboca. Se reinicia al fallar. (Actual: +{v} Mult)',
+  { id: 'doble_fondo', name: 'Doble o Nada', rarity: 'raro', desc: 'Tiros con 2 o más bolas tuyas: x2 Combo.',
+    onShot(S) { if (S.balls.length >= 2) S.add({ xmult: 2 }, this); } },
+  { id: 'racha', name: 'Racha Febril', rarity: 'raro', desc: '+1 Combo extra por cada nivel de TACADA.',
+    onShot(S) { if (S.streak) S.add({ mult: S.streak }, this); } },
+  { id: 'ricochet', name: 'Ricochet', rarity: 'raro', desc: 'Embocar con la blanca tocando 2 o más bandas: +400 Puntos.',
+    onShot(S) { if (S.cur.cueCushions >= 2) S.add({ pts: 400 }, this); } },
+  { id: 'ladron', art: 'usurero', name: 'Ladrón', rarity: 'raro', desc: 'Cada bola tuya embocada ROBA 30 Puntos al rival.',
+    onBall(S) { S.add({ steal: 30 }, this); } },
+  { id: 'cementerio', name: 'Cementerio', rarity: 'raro', desc: 'Gana +10 Puntos permanentes por cada bola que emboques. (Actual: +{v} por tiro)',
     state: () => ({ v: 0 }),
-    onShot(S, J) { if (S.balls.length && J.st.v) S.add({ mult: J.st.v }, J); },
-    onAfter(S, J) { J.st.v = S.balls.length && !S.scratch ? J.st.v + 2 : 0; } },
-  { id: 'cementerio', name: 'Cementerio', rarity: 'raro', desc: 'Gana +3 Fichas permanentes por cada bola embocada. (Actual: +{v})',
+    onShot(S) { if (this.st.v) S.add({ pts: this.st.v }, this); this.st.v += 10 * S.balls.length; } },
+  { id: 'ocho_maldito', name: 'El 8', rarity: 'raro', desc: 'Meter la bola que GANA la partida: +500 Puntos.',
+    onWinBall(S) { S.add({ pts: 500 }, this); } },
+  { id: 'ojo_cuervo', name: 'Ojo de Cuervo', rarity: 'raro', desc: 'Tu guía es larga y muestra los rebotes.', mods: { guide: 2 } },
+  { id: 'fantasma', name: 'Blanca Fantasma', rarity: 'raro', desc: 'En tu turno la blanca no puede caer en las troneras.', mods: { noScratch: true } },
+  { id: 'segunda', name: 'Segunda Oportunidad', rarity: 'raro', desc: 'Una vez por partida, si fallas (sin falta) sigues tirando.', once: true },
+  { id: 'mano_negra', name: 'Mano Negra', rarity: 'raro', desc: 'Una vez por partida, se te perdona una falta.', once: true },
+  { id: 'seguro', art: 'vela_negra', name: 'Seguro de Vida', rarity: 'raro', desc: 'Una vez por partida: si metes la 8 antes de tiempo, vuelve a la mesa y no pierdes.', once: true },
+  { id: 'arbitro', art: 'curandero', name: 'Árbitro Comprado', rarity: 'raro', desc: 'Tus faltas no restan puntos ni dan bola en mano al rival.', mods: { bribed: true } },
+  { id: 'matrimonio', name: 'Matrimonio Maldito', rarity: 'raro', desc: 'Meter una bola TUYA y una del RIVAL en el mismo tiro: +400 Puntos.',
+    onShot(S) { if (S.gifts.length) S.add({ pts: 400 }, this); } },
+  { id: 'rencor', art: 'sangria', name: 'Rencor', rarity: 'raro', desc: 'Cada bola que emboca el rival te carga +0.5 Combo para tu próximo tiro que emboque. (Cargado: +{v})',
     state: () => ({ v: 0 }),
-    onShot(S, J) { if (S.balls.length && J.st.v) S.add({ chips: J.st.v }, J); },
-    onAfter(S, J) { J.st.v += 3 * S.balls.length; } },
-  { id: 'doble_fondo', name: 'Doble Fondo', rarity: 'raro', desc: 'Tiros con 2 o más bolas: x3 Mult.',
-    onShot(S) { if (S.balls.length >= 2) S.add({ xmult: 3 }, this); } },
-  { id: 'ojo_cuervo', name: 'Ojo de Cuervo', rarity: 'raro', desc: 'La guía muestra el rebote de la blanca y la trayectoria completa.', mods: { guide: 2 } },
-  { id: 'ricochet', name: 'Ricochet', rarity: 'raro', desc: '+12 Mult si la blanca toca 3 o más bandas.',
-    onShot(S) { if (S.balls.length && S.cueCushions >= 3) S.add({ mult: 12 }, this); } },
-  { id: 'carronero', name: 'Carroñero', rarity: 'raro', desc: 'Al meter la blanca: ganas $3 y el tiro SÍ puntúa.',
-    mods: { scratchScores: true }, onScratch(S) { S.add({ money: 3 }, this); } },
-  { id: 'martillo', name: 'Martillo de Hueso', rarity: 'raro', desc: '+35% de potencia. La CARGA del saque vale el triple.', mods: { powerMul: 1.35, breakMul: 3 } },
-  { id: 'cuenta_atras', name: 'Reloj de Arena', rarity: 'raro', desc: 'x0.5 Mult extra por cada tiro que te quede.',
-    onShot(S) { if (S.balls.length && S.shotsLeft > 0) S.add({ xmult: 1 + 0.5 * S.shotsLeft }, this); } },
-  { id: 'vampiro', name: 'Vampiro', rarity: 'raro', desc: 'Gana x0.25 Mult por cada bola GRABADA embocada. (Actual: x{v})',
-    state: () => ({ v: 1 }),
-    onShot(S, J) { if (S.balls.length && J.st.v > 1) S.add({ xmult: J.st.v }, J); },
-    onAfter(S, J) { J.st.v += 0.25 * S.balls.filter((b) => b.ball.kind !== 'normal').length; } },
-  { id: 'ocho_maldito', name: 'El 8', rarity: 'raro', desc: 'Meter la 8 antes de tiempo NO maldice: da x3 Mult.',
-    mods: { eightSafe: true }, onBall(S, b) { if (b.ball.num === 8) S.add({ xmult: 3 }, this); } },
-  { id: 'fantasma', name: 'Blanca Fantasma', rarity: 'raro', desc: 'La blanca no puede caer en las troneras.', mods: { noScratch: true } },
-  { id: 'pulso', name: 'Pulso de Cirujano', rarity: 'raro', desc: 'x1.5 Mult si la blanca NO toca ninguna banda.',
-    onShot(S) { if (S.balls.length && S.cueCushions === 0) S.add({ xmult: 1.5 }, this); } },
-  { id: 'segunda', name: 'Segunda Oportunidad', rarity: 'raro', desc: 'Una vez por mesa, si un tiro no mete nada, lo recuperas.', mods: { refundMiss: true } },
-  // v1.3 — más raros
-  { id: 'tercera', name: 'A la Tercera', rarity: 'raro', desc: 'Cada TERCER tiro de la mesa (3º, 6º...): x3 Mult.',
-    onShot(S) { if (S.balls.length && S.shotIndex % 3 === 2) S.add({ xmult: 3 }, this); } },
-  { id: 'sangria', name: 'Sangría', rarity: 'raro', desc: 'Gana +1 Mult permanente por cada tiro que NO puntúa. (Actual: +{v} Mult)',
-    state: () => ({ v: 0 }),
-    onShot(S, J) { if (S.balls.length && J.st.v) S.add({ mult: J.st.v }, J); },
-    onAfter(S, J) { if (!S.isFreeBreak && !S.total) J.st.v += 1; } },
-  { id: 'matrimonio', name: 'Matrimonio Maldito', rarity: 'raro', desc: 'Si el tiro mete al menos una LISA y una RAYADA: x2.5 Mult.',
-    onShot(S) { if (S.balls.some((b) => isSolid(b.ball)) && S.balls.some((b) => isStripe(b.ball))) S.add({ xmult: 2.5 }, this); } },
-  { id: 'codicia', name: 'Codicia', rarity: 'raro', desc: 'x0.05 Mult por cada $1 que tengas (máx. x3).',
-    onShot(S) { const v = Math.min(3, 1 + 0.05 * Math.max(0, S.R.money)); if (S.balls.length && v > 1) S.add({ xmult: Math.round(v * 100) / 100 }, this); } },
-  { id: 'astrologo', name: 'El Astrólogo', rarity: 'raro', desc: 'Al ganar una mesa, sube de nivel un tipo de tiro al azar (Simple a Masacre).',
-    onTableEnd(R) {
-      const k = R.rng.pick(['simple', 'doblete', 'triplete', 'masacre']); R.levels[k]++;
-      if (OM.FX && OM.FX.popText) OM.FX.popText(320, 150, 'ASTRÓLOGO: ' + OM.SHOT_TYPES[k].name.toUpperCase() + ' NV.' + R.levels[k], 't', { size: 2 });
-    } },
+    onRivalBall() { this.st.v = Math.min(6, this.st.v + 0.5); },
+    onShot(S) { if (this.st.v) { S.add({ mult: this.st.v }, this); this.st.v = 0; } } },
+  { id: 'trucos', art: 'astrologo', name: 'Trucos de Feria', rarity: 'raro', desc: 'Embocar SALTANDO por encima de una bola, o con MASSÉ: x3 Combo.',
+    onShot(S) { if (S.cur.hopped || S.cur.curved) S.add({ xmult: 3 }, this); } },
+  { id: 'bola_oro', art: 'calavera_dorada', name: 'Bola de Oro', rarity: 'raro', desc: 'En cada partida una bola al azar es de ORO. Si la embocas tú: +500 Puntos.', gold: true,
+    onPot(S, b) { if (S.M.gold && S.M.gold[b.num] === S.me) S.add({ pts: 500 }, this); } },
+  { id: 'la_mano', art: 'carronero', name: 'La Mano', rarity: 'raro', desc: 'ACTIVO, 1 por partida: coloca la blanca donde quieras.', active: 'hand' },
+  // trastadas
+  { id: 'mal_de_ojo', art: 'cuenta_atras', name: 'Mal de Ojo', rarity: 'raro', desc: 'La guía del RIVAL es mucho más corta.', rival: { guide: -1 } },
+  { id: 'tembleque', art: 'vampiro', name: 'Tembleque', rarity: 'legendario', desc: 'El taco del RIVAL tiembla al apuntar.', rival: { shake: 1 } },
 
   // ---------------- ÉPICOS ----------------
-  { id: 'avalancha', name: 'Avalancha', rarity: 'epico', desc: 'Cada bola embocada multiplica x1.5 Mult.',
+  { id: 'avalancha', name: 'Avalancha', rarity: 'epico', desc: 'Cada bola tuya embocada: x1.5 Combo.',
     onBall(S) { S.add({ xmult: 1.5 }, this); } },
   { id: 'eco', name: 'Eco del Abismo', rarity: 'epico', desc: 'La primera bola de cada tiro puntúa DOS veces.', mods: { retriggerFirst: true } },
-  { id: 'calavera_dorada', name: 'Calavera Dorada', rarity: 'epico', desc: 'x2.5 Mult. Pierdes $1 en cada tiro que emboque.',
-    onShot(S) { if (S.balls.length) S.add({ xmult: 2.5 }, this); S.add({ money: -1 }, this); } },
-  { id: 'espejo_roto', name: 'Espejo Roto', rarity: 'epico', desc: 'Copia la habilidad del comodín a su DERECHA.', copy: true },
-  { id: 'parca', name: 'La Parca', rarity: 'epico', desc: 'x0.2 Mult por cada bola embocada en esta mesa (incluido el tiro). (Actual: {v} bolas)',
-    state: () => ({ v: 0 }),
-    onTableStart(R, J) { J.st.v = 0; },
-    onShot(S, J) { const n = J.st.v + S.balls.length; if (S.balls.length && n) S.add({ xmult: 1 + 0.2 * n }, J); },
-    onAfter(S, J) { J.st.v += S.balls ? S.balls.length : 0; } },
-  { id: 'cadena', name: 'Cadena Infernal', rarity: 'epico', desc: 'x0.5 Mult extra por cada nivel de RACHA.', unlock: 'racha5',
-    onShot(S) { if (S.balls.length && S.streak) S.add({ xmult: 1 + 0.5 * S.streak }, this); } },
-  { id: 'eclipse', name: 'Eclipse', rarity: 'epico', desc: 'x0.1 Mult por cada nivel de tiro que hayas subido. (Actual: x{v})',
-    state: () => ({ v: 1 }),
-    onShot(S, J) { const up = Object.values(S.R.levels).reduce((a, l) => a + l - 1, 0); J.st.v = Math.round((1 + 0.1 * up) * 10) / 10; if (S.balls.length && up) S.add({ xmult: J.st.v }, J); } },
+  { id: 'cadena', name: 'Cadena Infernal', rarity: 'epico', desc: 'Tu TACADA no se pierde al fallar: solo se reinicia con una falta.', mods: { keepStreak: true } },
+  { id: 'espejo_roto', name: 'Espejo Roto', rarity: 'epico', desc: 'Copia el comodín de su IZQUIERDA.', copy: true },
+  { id: 'terremoto', art: 'eclipse', name: 'Terremoto', rarity: 'epico', desc: 'ACTIVO, 1 por partida: sacude la mesa y mueve todas las bolas. No gasta tu turno.', active: 'quake' },
+  { id: 'dinamita', art: 'parca', name: 'Dinamita', rarity: 'epico', desc: 'ACTIVO, 1 por partida: tu próximo tiro EXPLOTA al primer contacto.', active: 'bomb' },
 
-  // ---------------- LEGENDARIOS (solo en Sobres Malditos) ----------------
-  { id: 'diablo', name: 'El Diablo', rarity: 'legendario', desc: 'Cada bola embocada da $1 y x1.25 Mult.',
-    onBall(S) { S.add({ money: 1, xmult: 1.25 }, this); } },
-  { id: 'ojo_abismo', name: 'Ojo del Abismo', rarity: 'legendario', desc: 'Cada bola cuenta como si estuviera grabada en HOLO (+10 Mult).',
-    onBall(S) { S.add({ mult: 10 }, this); } },
-  { id: 'barquero', name: 'El Barquero', rarity: 'legendario', desc: 'Las troneras atraen las bolas con fuerza y son un 15% más grandes.', unlock: 'win',
-    mods: { pocketMul: 1.15, pocketPull: 3 } },
-  { id: 'corona', name: 'La Corona Hueca', rarity: 'legendario', desc: 'x2 Mult, +x0.5 por cada Círculo que hayas superado.',
-    onShot(S) { if (S.balls.length) S.add({ xmult: 2 + 0.5 * S.R.circle }, this); } },
+  // ---------------- LEGENDARIOS ----------------
+  { id: 'diablo', name: 'El Diablo', rarity: 'legendario', desc: 'Cada bola tuya embocada: +1 Combo y roba 50 Puntos al rival.',
+    onBall(S) { S.add({ mult: 1, steal: 50 }, this); } },
+  { id: 'corona', name: 'La Corona Hueca', rarity: 'legendario', desc: 'x2 Combo, +x0.5 por cada partida que hayas ganado.',
+    onShot(S) { S.add({ xmult: 2 + 0.5 * S.P.wins }, this); } },
+  { id: 'barquero', name: 'El Barquero', rarity: 'legendario', desc: 'En tu turno las troneras atraen las bolas con fuerza y son un 10% más grandes.',
+    mods: { pocketMul: 1.1, pocketPull: 3 } },
+  { id: 'ojo_abismo', name: 'Ojo del Abismo', rarity: 'legendario', desc: 'Todas tus bolas cuentan como BANDA y COMBINACIÓN.', mods: { allTrick: true } },
 ];
 
-// Ediciones de comodín (v1.1). Salen al azar en la tienda y sobres.
-OM.EDITIONS = {
-  foil:     { name: 'Laminado', desc: '+50 Fichas', chance: 0.08, price: 2 },
-  holo:     { name: 'Holográfico', desc: '+10 Mult', chance: 0.04, price: 3 },
-  poli:     { name: 'Policromo', desc: 'x1.5 Mult', chance: 0.02, price: 5 },
-  negativo: { name: 'Negativo', desc: '+1 hueco de comodín', chance: 0.02, price: 5 },
-};
-
-// Desbloqueos persistentes (v1.1). test(META) → desbloqueado.
-OM.UNLOCKS = {
-  circulo2: { desc: 'Llega al Círculo II', test: (M) => M.best >= 1 },
-  circulo3: { desc: 'Llega al Círculo III', test: (M) => M.best >= 2 },
-  circulo4: { desc: 'Llega al Círculo IV', test: (M) => M.best >= 3 },
-  racha5:   { desc: 'Consigue una RACHA x5 en una mesa', test: (M) => (M.maxStreak || 0) >= 4 },
-  jefes3:   { desc: 'Derrota a 3 jefes (total)', test: (M) => (M.bosses || 0) >= 3 },
-  win:      { desc: 'Escapa del Abismo una vez', test: (M) => M.wins >= 1 },
-};
-OM.isUnlocked = (key) => !key || !OM.UNLOCKS[key] || OM.UNLOCKS[key].test(OM.META || {});
-
-// Grabados de bola (mejoras permanentes del "mazo" de 15 bolas)
-OM.ENGRAVINGS = {
-  normal: { name: 'Normal', desc: '' },
-  oro:     { name: 'Oro',     desc: '+$3 al embocarla.' },
-  cristal: { name: 'Cristal', desc: 'x2 Mult. 1 de 4 se rompe para siempre.' },
-  plomo:   { name: 'Plomo',   desc: '+50 Fichas. Pesa el doble.' },
-  fuego:   { name: 'Fuego',   desc: '+3 Mult por cada bola embocada en el tiro.' },
-  holo:    { name: 'Holo',    desc: '+10 Mult.' },
-  bomba:   { name: 'Bomba',   desc: 'Explota al primer golpe y dispersa las bolas. +30 Fichas.' },
-};
-
-// Tipos de tiro (como las "manos" de póker). Mejorables con Lunas Negras.
-OM.SHOT_TYPES = {
-  // v1.1b: Simple más fuerte (el bot mostró que el desgaste temprano mataba las partidas)
-  simple:   { name: 'Simple',   chips: 30,  mult: 2, lvlChips: 10, lvlMult: 1 },
-  doblete:  { name: 'Doblete',  chips: 50,  mult: 3, lvlChips: 15, lvlMult: 1 },
-  triplete: { name: 'Triplete', chips: 80,  mult: 4, lvlChips: 20, lvlMult: 2 },
-  masacre:  { name: 'Masacre',  chips: 120, mult: 6, lvlChips: 30, lvlMult: 3 },
-  limpia:   { name: 'Mesa Limpia', chips: 200, mult: 8, lvlChips: 40, lvlMult: 4 },
-};
-
-// Consumibles: Arcanos (efectos), Grabados (mejoran bolas) y Lunas (suben nivel de tiro)
-OM.ITEMS = [
-  // Arcanos — se usan durante la mesa o en la tienda
-  { id: 'tiza', name: 'La Tiza', kind: 'arcano', desc: '+1 Tiro en esta mesa.', when: 'table' },
-  { id: 'mano', name: 'La Mano', kind: 'arcano', desc: 'Coloca la blanca donde quieras.', when: 'table' },
-  { id: 'rueda', name: 'La Rueda', kind: 'arcano', desc: 'Vuelve a colocar las bolas que quedan en triángulo.', when: 'table' },
-  { id: 'ojo', name: 'El Ojo', kind: 'arcano', desc: 'Guía completa durante esta mesa.', when: 'table' },
-  { id: 'ermitano', name: 'El Ermitaño', kind: 'arcano', desc: 'Duplica tu dinero (máx. +$20).', when: 'any' },
-  { id: 'alquimista', name: 'El Alquimista', kind: 'arcano', desc: 'Convierte 2 bolas al azar en Oro.', when: 'any' },
-  { id: 'juicio', name: 'El Juicio', kind: 'arcano', desc: 'Crea un comodín aleatorio (si hay hueco).', when: 'any' },
-  // Grabados — se aplican a una bola elegida de tu set
-  { id: 'g_oro', name: 'Grabado de Oro', kind: 'grabado', eng: 'oro', desc: 'Graba ORO en una bola: +$3 al embocarla.', when: 'any' },
-  { id: 'g_cristal', name: 'Grabado de Cristal', kind: 'grabado', eng: 'cristal', desc: 'Graba CRISTAL: x2 Mult, puede romperse.', when: 'any' },
-  { id: 'g_plomo', name: 'Grabado de Plomo', kind: 'grabado', eng: 'plomo', desc: 'Graba PLOMO: +50 Fichas, pesa el doble.', when: 'any' },
-  { id: 'g_fuego', name: 'Grabado de Fuego', kind: 'grabado', eng: 'fuego', desc: 'Graba FUEGO: +3 Mult por bola del tiro.', when: 'any' },
-  { id: 'g_holo', name: 'Grabado Holo', kind: 'grabado', eng: 'holo', desc: 'Graba HOLO: +10 Mult.', when: 'any' },
-  { id: 'g_bomba', name: 'Grabado Bomba', kind: 'grabado', eng: 'bomba', desc: 'Graba BOMBA: explota al primer golpe.', when: 'any' },
-  // Lunas Negras — suben de nivel un tipo de tiro
-  { id: 'luna_simple', name: 'Luna de Ceniza', kind: 'luna', shot: 'simple', desc: 'Sube de nivel el tiro SIMPLE.', when: 'any' },
-  { id: 'luna_doblete', name: 'Luna de Sangre', kind: 'luna', shot: 'doblete', desc: 'Sube de nivel el DOBLETE.', when: 'any' },
-  { id: 'luna_triplete', name: 'Luna Ahogada', kind: 'luna', shot: 'triplete', desc: 'Sube de nivel el TRIPLETE.', when: 'any' },
-  { id: 'luna_masacre', name: 'Luna Podrida', kind: 'luna', shot: 'masacre', desc: 'Sube de nivel la MASACRE.', when: 'any' },
-  { id: 'luna_limpia', name: 'Luna Vacía', kind: 'luna', shot: 'limpia', desc: 'Sube de nivel la MESA LIMPIA.', when: 'any' },
-];
-
-// Tacos = "mazos" iniciales
-// v1.3: todos tienen 5 tiros salvo Vidrio (el bot mostró que 4 tiros hunden cualquier taco: 1-3% de victorias)
-// y compensan con dinero, huecos o niveles. Bot medio: 5-9% de victorias cada uno (Peregrino 8%).
+// Tacos: el estilo de cada jugador durante toda la serie.
 OM.CUES = [
-  { id: 'peregrino', name: 'Taco del Peregrino', desc: 'Equilibrado. 5 tiros por mesa, $4.', shots: 5, money: 4 },
-  { id: 'sangriento', name: 'Taco Sangriento', desc: 'Empieza con Tiza Azul, pero sin dinero ($0).', shots: 5, money: 0, joker: 'tiza_azul' },
-  { id: 'usura', name: 'Taco de la Usura', desc: 'Empieza con $6. Interés hasta $7.', shots: 5, money: 6, interestCap: 7, unlock: 'circulo2' },
-  { id: 'hueso', name: 'Taco de Hueso', desc: '3 bolas grabadas al azar. 1 comodín menos.', shots: 5, money: 4, randomEng: 3, slots: -1, unlock: 'circulo3' },
-  { id: 'espectral', name: 'Taco Espectral', desc: 'Empieza con Blanca Fantasma, pero sin dinero ($0).', shots: 5, money: 0, joker: 'fantasma', unlock: 'jefes3' },
-  // v1.3
-  { id: 'ebano', name: 'Taco de Ébano', desc: 'Todos los tiros empiezan a nivel 2. 1 comodín menos.', shots: 5, money: 4, levels: 2, slots: -1 },
-  { id: 'vidrio', name: 'Taco de Vidrio', desc: '6 tiros por mesa. Solo 3 huecos de comodín.', shots: 6, money: 4, slots: -2, unlock: 'circulo4' },
-  { id: 'pacto', name: 'Taco del Pacto', desc: 'Empieza con un comodín ÉPICO al azar. $0, sin interés.', shots: 5, money: 0, interestCap: 0, randomJoker: 'epico', unlock: 'racha5' },
+  { id: 'peregrino', name: 'Taco del Peregrino', desc: 'Equilibrado. Tu guía es un 30% más larga.', mods: { guideLen: 1.3 } },
+  { id: 'sangriento', name: 'Taco Sangriento', desc: '+20% de potencia. Empieza con Tiza Azul. Tu guía es un 35% más corta.', mods: { powerMul: 1.2, guideLen: 0.65 }, joker: 'tiza_azul' },
+  { id: 'usura', name: 'Taco de la Usura', desc: 'Ganar una partida: +300 Puntos extra. Perderla: +100.', winBonus: 300, loseBonus: 100 },
+  { id: 'hueso', name: 'Taco de Hueso', desc: 'Tus SALTOS y MASSÉS son un 50% más fuertes. Empieza con Trucos de Feria.', mods: { trickMul: 1.5 }, joker: 'trucos' },
+  { id: 'espectral', name: 'Taco Espectral', desc: 'Empieza con Blanca Fantasma. -10% de potencia.', mods: { powerMul: 0.9 }, joker: 'fantasma' },
+  { id: 'ebano', name: 'Taco de Ébano', desc: 'Guía larga con rebotes. -15% de potencia.', mods: { guide: 2, powerMul: 0.85 } },
+  { id: 'vidrio', name: 'Taco de Vidrio', desc: 'Todos tus puntos x1.3. Cada falta te quita el 12% de tus puntos (mínimo 300).', mods: { pointsMul: 1.3, foulCost: 300, foulPct: 0.12 } },
+  { id: 'pacto', name: 'Taco del Pacto', desc: 'Empieza con un comodín ÉPICO al azar. Cada falta tuya le pasa al rival el 10% de tus puntos (mínimo 150).', randomJoker: 'epico', mods: { foulGift: 150, foulGiftPct: 0.1 } },
 ];
 
-// Jefes (mesas de jefe con reglas malditas)
-OM.BOSSES = [
+// Obstáculos (los antiguos jefes): aparecen en las partidas 3, 4 y 5 y afectan a los dos jugadores.
+// grp: no salen juntos dos del mismo grupo.
+OM.OBSTACLES = [
   { id: 'sepulturero', name: 'El Sepulturero', desc: 'Las troneras laterales están selladas.' },
-  { id: 'niebla', name: 'La Niebla', desc: 'Solo ves cerca de la bola blanca.' },
-  { id: 'gloton', name: 'El Glotón', desc: 'La primera bola de cada tiro no da Fichas.' },
-  { id: 'sanguijuela', name: 'La Sanguijuela', desc: 'Pierdes $2 por cada tiro.' },
-  { id: 'pendulo', name: 'El Péndulo', desc: 'La mesa se inclina y oscila.' },
-  { id: 'verdugo', name: 'El Verdugo', desc: 'Fallar o meter la blanca te cuesta 1 tiro extra.' },
-  { id: 'cienaga', name: 'La Ciénaga', desc: 'El paño frena el doble.' },
-  { id: 'escarcha', name: 'La Escarcha', desc: 'El paño apenas frena. Todo resbala.' },
-  { id: 'coleccionista', name: 'El Coleccionista', desc: 'Solo puntúan las bolas RAYADAS.' },
-  { id: 'ciego', name: 'El Ciego', desc: 'No hay guía de apuntado: solo el taco.' },
-  { id: 'purista', name: 'La Purista', desc: 'Solo puntúan las bolas LISAS.' },
-  { id: 'reloj', name: 'El Reloj', desc: 'Tienes 1 tiro menos en esta mesa.' },
-  // v1.3
-  { id: 'tasador', name: 'El Tasador', desc: 'Tus Fichas se reducen a la mitad en cada tiro.' },
-  { id: 'inquisidora', name: 'La Inquisidora', desc: 'Ni los grabados de tus bolas ni las ediciones de tus comodines tienen efecto.' },
-  { id: 'durmiente', name: 'La Durmiente', desc: 'Tu comodín de más a la IZQUIERDA duerme: no tiene efecto.' },
-  { id: 'espina', name: 'La Espina', desc: 'No hay RACHA ni CARGA del saque.' },
-  { id: 'boca', name: 'La Boca', desc: 'Las troneras se encogen a la mitad.', final: true },
+  { id: 'pendulo', name: 'El Péndulo', desc: 'La mesa se inclina: las bolas derivan.' },
+  { id: 'cienaga', name: 'La Ciénaga', desc: 'El paño frena el doble.', grp: 'fr' },
+  { id: 'escarcha', name: 'La Escarcha', desc: 'El paño apenas frena. Todo resbala.', grp: 'fr' },
+  { id: 'niebla', name: 'La Niebla', desc: 'Solo se ve cerca de la bola blanca.', grp: 'vis' },
+  { id: 'ciego', name: 'El Ciego', desc: 'Sin guía de tiro: solo el taco.', grp: 'vis' },
+  { id: 'boca', name: 'La Boca', desc: 'Las troneras se encogen un 22%.' },
+  { id: 'pilares', art: 'espina', name: 'Los Pilares', desc: 'Tres pilares de hueso rebotan las bolas como un pinball.', grp: 'obj' },
+  { id: 'vortice', art: 'gloton', name: 'El Vórtice', desc: 'Un remolino en el centro tuerce las trayectorias.', grp: 'obj' },
+  { id: 'portales', art: 'coleccionista', name: 'Los Portales', desc: 'Lo que entra por un portal sale por el otro.', grp: 'obj' },
+  { id: 'reloj', name: 'El Reloj', desc: '15 segundos por tiro. Si se acaban, el taco dispara solo.' },
+  { id: 'verdugo', name: 'El Verdugo', desc: 'Cada falta cuesta 300 Puntos.' },
 ];
 
-// Círculos (actos). 3 mesas cada uno: Menor, Mayor, Jefe.
-OM.CIRCLES = [
-  { id: 'limbo',    name: 'I · Limbo',     base: 140,   theme: 'limbo' },
-  { id: 'lujuria',  name: 'II · Lujuria',  base: 460,   theme: 'lujuria' },
-  { id: 'gula',     name: 'III · Gula',    base: 1100,  theme: 'gula' },
-  { id: 'avaricia', name: 'IV · Avaricia', base: 2500,  theme: 'avaricia' },
-  { id: 'ira',      name: 'V · Ira',       base: 5100, theme: 'ira' },
-  { id: 'abismo',   name: 'VI · Abismo',   base: 9800, theme: 'abismo' },
-];
-OM.TABLE_KINDS = [
-  { id: 'menor', name: 'Mesa Menor', mul: 1, reward: 3 },
-  { id: 'mayor', name: 'Mesa Mayor', mul: 1.5, reward: 4 },
-  { id: 'jefe',  name: 'Mesa Jefe',  mul: 2, reward: 5 },
+// Temas de mesa por partida (reutiliza los círculos)
+OM.MATCH_THEMES = ['limbo', 'lujuria', 'gula', 'ira', 'abismo'];
+OM.MODES = {
+  '8': { name: 'BOLA 8', desc: 'Lisas contra rayadas. Mete tu grupo y luego la 8.' },
+  '9': { name: 'BOLA 9', desc: 'Toca siempre la bola más baja. Quien mete la 9 gana.' },
+  mix: { name: 'MIXTA', desc: 'Partidas 1, 3 y 5 a bola 8; la 2 y la 4 a bola 9.' },
+};
+OM.BOT_LEVELS = [
+  { id: 'facil', name: 'FÁCIL', botName: 'Bot Novato' },
+  { id: 'medio', name: 'MEDIO', botName: 'Bot Tahúr' },
+  { id: 'dificil', name: 'DIFÍCIL', botName: 'Bot Diablo' },
 ];

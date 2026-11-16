@@ -1,63 +1,70 @@
 # 8 — Documento de Diseño (GDD)
 
-> *Un roguelite de billar en un bar del infierno. Mete bolas, encadena comodines malditos y desciende los seis círculos.*
+> **v3.0: el juego es un pool arcade 1 contra 1.** El roguelite (v1.x) y la bola 9 con vida (v2.0) quedan en el historial de git (rama `backup/v2.0-bola9`).
+
+> *Pool arcade 1v1 en un bar del infierno. Cinco partidas, comodines tramposos y trucos de taco: gana quien sume más puntos.*
 
 ## 1. Pilares
-1. **Un tiro, una decisión.** Cada golpe es un pequeño puzle físico con riesgo/recompensa (¿voy a por el doblete o aseguro la simple?).
-2. **Números que explotan.** Puntuación `Fichas × Mult` que crece de forma absurda gracias a sinergias. El *juice* de cada cálculo es sagrado.
-3. **Cada partida es distinta.** Comodines, grabados de bola, lunas y jefes generan builds diferentes.
-4. **Oscuro, retro, legible.** Pixel art de 32 colores, CRT, velas y neón enfermo — pero siempre se lee qué pasa.
+1. **1 contra 1 de verdad.** Contra un bot (fácil, medio, difícil), dos jugadores en el mismo dispositivo u online por sala.
+2. **Los tiros vistosos pagan.** Dobles, triples, bandas, combinaciones, tacadas, saltos y massés multiplican los puntos. Meter una bola sin más vale poco.
+3. **Trastadas.** Los comodines no solo suman: roban puntos, encogen las troneras del rival, le hacen temblar el taco o sacuden la mesa.
+4. **Siempre hay partido.** El que va por detrás elige entre más comodines, saca la siguiente partida y las últimas partidas valen más.
 
-## 2. Qué aprendemos de los grandes
-| Juego | Lección que aplicamos |
+## 2. Estructura
+```
+Preparación (modo, tacos) -> [ Draft de comodín -> Partida ] x5 -> Resultado de la serie
+```
+- **Serie de 5 partidas.** Gana quien tenga **más puntos** al final (desempate: partidas ganadas).
+- Ganar una partida da 1.000 / 1.250 / 1.500 / 2.000 / 3.000 puntos. Además, 100 por cada bola que le quede al rival.
+- **Draft**: antes de cada partida cada jugador elige 1 comodín de 3 (4 si va por detrás). Se queda toda la serie.
+- **Obstáculos** (los antiguos jefes): la partida 3 y la 4 traen uno, la final trae dos.
+- **Modos**: Bola 8 (principal), Bola 9, o Mixta (1, 3 y 5 a bola 8; 2 y 4 a bola 9).
+
+## 3. Reglas
+**Bola 8.** Mesa abierta hasta que alguien emboca después del saque: ese jugador se queda el grupo de esa bola. Hay que tocar primero una bola propia. Si embocas una tuya, sigues. Con el grupo limpio, la 8 gana. Meter la 8 antes de tiempo (o con falta) pierde la partida. La 8 en el saque vuelve a la mesa.
+
+**Bola 9.** Hay que tocar primero la bola más baja. Todo lo que entre en un tiro legal cuenta. La 9 legal gana; en el saque o con falta, vuelve.
+
+**Falta** (blanca dentro, no tocar nada, tocar primero una bola que no toca, que tras el contacto ninguna bola toque banda sin embocar nada, o agotar los 30 s del tiro): -50 puntos y bola en mano para el rival.
+
+**Saque nerfeado.** El triángulo se coloca con una pequeña variación por semilla y el impulso de saque es mucho menor que en v1/v2. Las bolas del saque valen 25 puntos fijos, sin combo ni comodines, y no asignan grupo. Saca el que perdió la partida anterior.
+
+## 4. Puntuación: Puntos x Combo
+| Cosa | Valor |
 |---|---|
-| **Balatro** | Estructura de *ciegas* → **3 mesas por círculo (Menor/Mayor/Jefe)**, objetivo de puntos con tiros limitados, `Fichas × Mult` con animación paso a paso, comodines con sinergias, tienda entre rondas, interés por ahorro, lunas (≈planetas) que suben de nivel el tipo de tiro. |
-| **Peglin** | La física *es* el juego: la habilidad del jugador importa, pero el build convierte buenos tiros en tiros brutales. Guía de apuntado generosa. |
-| **Slay the Spire** | Jefes con reglas visibles **antes** de entrar (el jugador planifica). Rarezas claras. Elección significativa en la tienda. |
-| **Luck be a Landlord** | Escalado de objetivos que obliga a construir motor, no solo a jugar bien. |
-| **Hades** | Muerte = progreso: estadísticas y colección persistentes, ganas de "una más". Feedback audiovisual en cada acción. |
-| **Vampire Survivors** | Escalada caótica deliciosa: los comodines épicos rompen el juego a propósito. |
+| Bola propia | +100 |
+| 2 / 3 / 4+ bolas en un tiro | Combo x2 / x3 / x5 |
+| Tacada (tiros seguidos embocando) | +1 Combo por nivel (máx. +5) |
+| Banda (la bola tocó banda antes de entrar) | +50 |
+| Combinación (entra una bola que no tocó la blanca) | +100 |
+| De rebote (la blanca tocó banda antes) | +100 |
+| De lejos | +50 |
+| Embocar saltando por encima de una bola (por bola saltada) o con massé | +150 |
+| La 8 / la 9 ganadora | +500 |
 
-## 3. Bucle de juego
-```
-Elegir Taco ─► Mapa del círculo ─► Mesa (tiros) ─► Cobro ─► Tienda ─► siguiente mesa
-                    ▲                                                     │
-                    └──────────── siguiente círculo tras el Jefe ◄────────┘
-```
-- **Run**: 6 círculos × 3 mesas = 18 mesas. Ganar el Jefe del círculo VI = victoria. Tras la victoria: modo **Infinito** (objetivos ×2.2 por círculo).
-- **Mesa**: tus 15 bolas se colocan en triángulo; tienes N tiros (5 por defecto) para alcanzar el objetivo. Las bolas embocadas desaparecen de la mesa (no de tu set). Si la mesa se vacía, se vuelve a montar.
-- **Saque libre (v1.2)**: el saque (y cada nuevo triángulo) **no gasta tiro ni puntúa**. Cada bola que entra en el saque da **+2 Mult de CARGA**, que se suma al próximo tiro que puntúe (no se pierde por fallar). La falta en el saque solo da bola en mano y la 8 en el saque vuelve al punto sin maldición. Motivo: en v1.1 el 60% de las mesas se ganaban solo con el saque, y fallarlo se sentía injusto.
-- **Derrota**: acabar los tiros sin alcanzar el objetivo. Permadeath.
+Los valores viven en `OM.POINTS` (`src/game/data.js`).
 
-## 4. Puntuación
-`Puntos del tiro = (Fichas del tipo de tiro + Fichas de bolas + bonos) × (Mult del tipo + bonos) × xMult...`
-- **Tipo de tiro** por nº de bolas embocadas: Simple (1), Doblete (2), Triplete (3), Masacre (4+), Mesa Limpia (8 negra como última bola). Cada tipo tiene nivel (Lunas Negras).
-- **Fichas por bola** = número de la bola × 5 (las rayadas valen más que las lisas).
-- **Banda**: bola que tocó banda antes de entrar → +10 fichas.
-- **Racha**: cada tiro seguido que emboca suma +1 Mult (máx. +8). El saque no la rompe.
-- **La 8 maldita**: meterla antes de tiempo (fuera del saque) = **MALDICIÓN**: el tiro puntúa 0 y la 8 vuelve al punto. Meterla la última = Mesa Limpia.
-- **Falta (blanca dentro)**: el tiro puntúa 0 y la siguiente es bola en mano.
-- Orden de evaluación (visible, animado): tipo de tiro → cada bola (y sus grabados, y comodines `onBall` de izquierda a derecha) → comodines `onShot` de izquierda a derecha → total.
+## 5. Ángulo de golpe (mecánica nueva)
+Además del efecto (punto de impacto en la blanca) se puede **elevar el taco** (0 a 80 grados):
+- **Massé**: elevación + efecto lateral. La blanca hace una curva, más cerrada cuanta más elevación.
+- **Salto**: elevación de 32 grados o más golpeando al centro. La blanca vuela por encima de las bolas.
+- **Piqué**: elevación + efecto abajo. Retrocede más.
 
-## 5. Economía
-- Recompensa: Menor $3, Mayor $4, Jefe $5 + $1 por tiro sobrante + interés $1 por cada $5 (máx. $5).
-- Tienda: 2 comodines, 2 consumibles, 1 sobre; *reroll* $5 (+$1 por uso). Vender = mitad del precio.
-- Huecos: 5 comodines, 2 consumibles.
+La guía simula la blanca con los mandos actuales, así que la curva y el arco del salto se ven antes de tirar. **El efecto y la elevación se reinician después de cada tiro.**
 
-## 6. Contenido v1
-- **30 comodines** (13 comunes, 10 raros, 5 épicos, 2 legendarios) — ver `src/game/data.js`.
-- **6 grabados** de bola: Oro, Cristal, Plomo, Fuego, Holo, Bomba.
-- **19 consumibles**: 7 Arcanos, 6 Grabados, 5 Lunas Negras... (+1).
-- **4 tacos** iniciales (≈ mazos de Balatro).
-- **10 jefes** con reglas malditas (9 normales + La Boca, jefe final).
-- **6 círculos** con identidad visual propia.
+## 6. Contenido
+- **52 comodines**: de puntos (Bandolero, Doble o Nada, Trucos de Feria...), de mesa (Imán, Blanca Fantasma, El Barquero...), trastadas contra el rival (Tembleque, Mal de Ojo, Boca Chica, Ladrón, Peaje...) y activos de un uso por partida (La Mano, Terremoto, Dinamita).
+- **8 tacos** con estilo propio (potencia, guía, trucos, puntos de victoria...).
+- **12 obstáculos**: troneras selladas, péndulo, ciénaga, escarcha, niebla, sin guía, troneras pequeñas, pilares tipo pinball, vórtice, portales, reloj de 15 s y verdugo.
 
 ## 7. Controles
-- **Ratón/táctil**: arrastra *desde la blanca hacia atrás* (tirachinas) para apuntar y cargar potencia; suelta para tirar. Rueda/teclas ←→ para ajuste fino. Clic derecho/ESC cancela.
-- Teclado: `Espacio` mantener = cargar potencia; `R` reiniciar run (en menú de pausa); `M` silencio.
+- Ratón/táctil: apunta, arrastra hacia atrás para cargar, suelta para tirar.
+- `WASD` efecto, `Q/E` (o flechas arriba/abajo) ángulo de golpe, `R` centrar, flechas izquierda/derecha y rueda: ajuste fino, `Espacio`: potencia, `M`: música.
 
-## 8. Dirección de arte
-Ver `docs/ART_CONTRACT.md`. Paleta "Cripta" de 32 colores, 640×360, CRT, sprites con contorno oscuro, colores semánticos fijos (Fichas azul, Mult rojo, Dinero oro).
+## 8. Online
+Sala con código de 4 letras. El relé es `tools/serve.js`: los dos jugadores abren la dirección de ese servidor. Sin servidor (archivo suelto o artifact) quedan los bots y el modo de 2 jugadores local. Ver `src/game/net.js`.
 
-## 9. Persistencia
-`localStorage`: mejor círculo alcanzado, récord de tiro, partidas jugadas/ganadas, comodines descubiertos (colección), ajustes (CRT, volumen).
+## 9. Pendiente / ideas
+- Balance fino de comodines con partidas humanas (el bot no usa efecto ni elevación).
+- Reconexión online y revancha en la misma sala.
+- Bots que usen massé y salto.

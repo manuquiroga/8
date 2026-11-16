@@ -20,15 +20,15 @@
   ctx.imageSmoothingEnabled = false;
   const P = OM.PAL;
   ctx.fillStyle = P['1']; ctx.fillRect(0, 0, 640, 360);
-  const names = ['paciente', 'diezmo', 'barrendero', 'pares', 'tercera', 'sangria', 'matrimonio', 'codicia', 'astrologo', 'eclipse', 'corona'].map((n) => 'joker_' + n)
+  const names = ['paciente', 'diezmo', 'barrendero', 'pares', 'tercera', 'sangria', 'matrimonio', 'codicia', 'astrologo', 'eclipse', 'corona', 'combinador', 'mano_negra', 'curandero'].map((n) => 'joker_' + n)
     .concat(['tasador', 'inquisidora', 'durmiente', 'espina'].map((n) => 'boss_' + n))
     .concat(['ebano', 'vidrio', 'pacto'].map((n) => 'cue_' + n));
   names.forEach((n, i) => {
-    const x = 8 + (i % 6) * 104, y = 6 + Math.floor(i / 6) * 118, s = 3;
+    const x = 6 + (i % 7) * 90, y = 4 + Math.floor(i / 7) * 120, s = 2.5;
     const sp = OM.PX.get(n);
-    ctx.fillStyle = P['2']; ctx.fillRect(x - 1, y - 1, 98, 98);
+    ctx.fillStyle = P['2']; ctx.fillRect(x - 1, y - 1, 82, 82);
     if (sp) ctx.drawImage(sp.c, x, y, sp.w * s, sp.h * s); else { ctx.fillStyle = P.b; ctx.fillRect(x, y, 20, 20); }
-    ctx.fillStyle = P['6']; ctx.font = '8px monospace'; ctx.fillText(n, x, y + 108);
+    ctx.fillStyle = P['6']; ctx.font = '8px monospace'; ctx.fillText(n, x, y + 92);
   });
 })();
 </script>

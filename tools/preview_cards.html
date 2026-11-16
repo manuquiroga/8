@@ -58,17 +58,17 @@
       OM.CARDS.drawJoker(ctx, jd[28], 596, y, { t, scale: 1 });
       OM.CARDS.drawJoker(ctx, jd[29], 596, y + 58, { t, scale: 0.5 });
     } else if (page === 2) {
-      OM.ITEMS.forEach((it, i) => {
+      (OM.ITEMS || []).forEach((it, i) => {
         const x = 10 + (i % 9) * 40, y = 8 + Math.floor(i / 9) * 52;
         OM.CARDS.drawItem(ctx, it, x, y, { t, wobble: true });
       });
-      OM.BOSSES.forEach((b, i) => {
+      OM.OBSTACLES.forEach((b, i) => {
         const x = 10 + (i % 5) * 58, y = 116 + Math.floor(i / 5) * 60;
         OM.CARDS.drawBossMedal(ctx, b, x, y, { t, hover: i === 1, defeated: i === 2 });
         label(b.id, x, y + 56);
       });
       OM.CUES.forEach((c, i) => { zoom('cue_' + c.id, 380 + i * 60, 10, 2); label(c.id, 380 + i * 60, 66); });
-      OM.ITEMS.slice(0, 3).forEach((it, i) => OM.CARDS.drawItem(ctx, it, 380 + i * 40, 80, { t, hover: i === 1, selected: i === 2 }));
+      (OM.ITEMS || []).slice(0, 3).forEach((it, i) => OM.CARDS.drawItem(ctx, it, 380 + i * 40, 80, { t, hover: i === 1, selected: i === 2 }));
       ['arcano', 'luna', 'grabado', 'maldito'].forEach((k, i) => OM.CARDS.drawPack(ctx, k, 330 + i * 52, 250, { t, hover: i === 3, wobble: true }));
       OM.CARDS.drawBack(ctx, 548, 250, 'joker', { t, hover: true });
       OM.CARDS.drawBack(ctx, 596, 257, 'item', { t });
@@ -76,21 +76,21 @@
       const list = OM.JOKERS.slice(page === 3 ? 0 : 18, page === 3 ? 18 : 36);
       list.forEach((j, i) => { const x = 8 + (i % 6) * 105, y = 6 + Math.floor(i / 6) * 118; zoom('joker_' + j.id, x, y, 3); label(j.id, x, y + 105); });
     } else if (page === 5) {
-      OM.ITEMS.forEach((it, i) => { const x = 8 + (i % 6) * 105, y = 6 + Math.floor(i / 6) * 118; zoom('item_' + it.id, x, y, 4); label(it.id, x, y + 106); });
+      (OM.ITEMS || []).forEach((it, i) => { const x = 8 + (i % 6) * 105, y = 6 + Math.floor(i / 6) * 118; zoom('item_' + it.id, x, y, 4); label(it.id, x, y + 106); });
     } else if (page === 6) {
-      OM.BOSSES.forEach((b, i) => { const x = 8 + (i % 6) * 105, y = 6 + Math.floor(i / 6) * 118; zoom('boss_' + b.id, x, y, 3); label(b.id, x, y + 105); });
+      OM.OBSTACLES.forEach((b, i) => { const x = 8 + (i % 6) * 105, y = 6 + Math.floor(i / 6) * 118; zoom('boss_' + b.id, x, y, 3); label(b.id, x, y + 105); });
       ['arcano', 'luna', 'grabado', 'maldito'].forEach((k, i) => { const q = i + 10; zoom('pack_emb_' + k, 8 + (q % 6) * 105 + 8, 6 + Math.floor(q / 6) * 118 + 8, 3); });
       OM.CUES.forEach((c, i) => { const q = i + 14; zoom('cue_' + c.id, 8 + (q % 6) * 105 + 8, 6 + Math.floor(q / 6) * 118 + 8, 3); label(c.id, 8 + (q % 6) * 105, 6 + Math.floor(q / 6) * 118 + 105); });
     } else if (page === 7) {
       ctx.save(); ctx.scale(3, 3);
       const js = [OM.JOKERS[0], OM.JOKERS[13], OM.JOKERS[23], OM.JOKERS[28]];
       js.forEach((j, i) => OM.CARDS.drawJoker(ctx, j, 4 + i * 44, 4, { t }));
-      OM.CARDS.drawItem(ctx, OM.ITEMS[0], 180, 4, { t });
-      OM.CARDS.drawItem(ctx, OM.ITEMS[8], 180, 62, { t });
-      OM.CARDS.drawItem(ctx, OM.ITEMS[14], 4, 62, { t });
+      OM.CARDS.drawItem(ctx, (OM.ITEMS || [])[0], 180, 4, { t });
+      OM.CARDS.drawItem(ctx, (OM.ITEMS || [])[8], 180, 62, { t });
+      OM.CARDS.drawItem(ctx, (OM.ITEMS || [])[14], 4, 62, { t });
       OM.CARDS.drawPack(ctx, 'maldito', 38, 62, { t });
       OM.CARDS.drawBack(ctx, 82, 62, 'joker', { t });
-      OM.CARDS.drawBossMedal(ctx, OM.BOSSES[9], 126, 64, { t });
+      OM.CARDS.drawBossMedal(ctx, OM.OBSTACLES[9], 126, 64, { t });
       ctx.restore();
     }
     requestAnimationFrame((ms) => frame(ms / 1000));

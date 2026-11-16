@@ -361,7 +361,7 @@ OM.ART_INIT = OM.ART_INIT || [];
       }
     }
     // ilustración
-    const spr = PX.get('joker_' + def.id);
+    const spr = PX.get('joker_' + (def.art || def.id));
     if (spr) ctx.drawImage(spr.c, 4, 6);
     // escuadras góticas en las esquinas de la ventana
     const L = rr.ramp[2], L2 = rr.ramp[3];
@@ -716,7 +716,7 @@ OM.ART_INIT = OM.ART_INIT || [];
       const x = Math.round(24 + Math.cos(a) * 18.5 - 0.5), y = Math.round(24 + Math.sin(a) * 18.5 - 0.5);
       g.p(x, y, fin ? 'i' : '7'); g.p(x + 1, y + 1, '0');
     }
-    const spr = PX.get('boss_' + def.id);
+    const spr = PX.get('boss_' + (def.art || def.id));
     if (spr) ctx.drawImage(spr.c, 8, 8);
     if (state === 'defeated') {
       ctx.globalCompositeOperation = 'source-atop';

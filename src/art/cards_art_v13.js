@@ -138,6 +138,38 @@
     h.star(5, 7, 'i', '8'); h.star(27, 7, 'i', '8'); h.star(16, 4, 'i', '8');
   });
 
+  // v2.0 — comodines de pool
+  J('combinador', (h) => {
+    h.halo(16, 16, 15, 'n');
+    // la blanca empuja una bola que empuja a otra hacia la tronera
+    h.fill(E(29, 4, 3.5, 3.5), '0');
+    h.ball(6, 26, 4, { col: R.bone });
+    h.ball(15, 17, 5, { col: R.red });
+    h.ball(23, 10, 5, { col: R.toxic });
+    h.dash(9, 23, 12, 20, 'n', 1, 1); h.dash(19, 13, 21, 11, 'n', 1, 1); h.dash(26, 7, 28, 5, 'i', 1, 1);
+    h.star(4, 6, 'n', '8');
+  });
+
+  J('mano_negra', (h) => {
+    h.halo(16, 16, 15, 's');
+    // mano esquelética negra que aparta una bola
+    h.shade(U(Rc(8, 16, 13, 12), Cap(9, 16, 7, 6, 1.6), Cap(12, 16, 12, 4, 1.6), Cap(15, 16, 16, 4, 1.6), Cap(18, 16, 20, 6, 1.6), Cap(21, 20, 26, 14, 1.6)), R.night, { bias: 0.2 });
+    [[7, 9], [12, 7], [16, 7], [20, 9]].forEach(([x, y]) => h.p(x, y, '5'));
+    h.line(10, 20, 19, 20, '3'); h.line(10, 24, 19, 24, '3');
+    h.ball(27, 25, 4, { col: R.violet });
+    h.p(25, 30, 't'); h.p(4, 29, 't');
+  });
+
+  J('curandero', (h) => {
+    h.halo(16, 16, 15, 'm');
+    // dos bolas y una cruz verde: dobletes que curan
+    h.ball(9, 21, 6, { col: R.blue });
+    h.ball(21, 22, 6, { col: R.red });
+    h.shade(U(Rc(13, 2, 6, 14), Rc(9, 6, 14, 6)), R.toxic, {});
+    h.fill(Rc(15, 4, 2, 10), 'n'); h.fill(Rc(11, 8, 10, 2), 'n');
+    h.star(27, 6, 'm', '8'); h.star(4, 9, 'm', '8');
+  });
+
   // ---------------- JEFES ----------------
   B('tasador', (h) => {
     // sombrero de copa

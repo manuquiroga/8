@@ -10,24 +10,13 @@ window.OM = window.OM || {};
   OM.ctx = ctx; OM.buf = buf.c;
 
   // ---------- persistencia ----------
-  OM.META = { best: 0, runs: 0, wins: 0, bestShot: 0, seen: {}, crt: true, music: true, sfx: true, tutorial: false };
+  OM.META = { series: 0, wins: 0, bestPts: 0, bestShot: 0, seen: {}, crt: true, music: true, sfx: true, name: 'Jugador', cue: 'peregrino', bot: 'medio', mode: '8' };
   try { Object.assign(OM.META, JSON.parse(localStorage.getItem('om_meta') || '{}')); } catch (e) {}
+  if (!OM.META.seen || typeof OM.META.seen !== 'object') OM.META.seen = {};
   OM.saveMeta = () => { try { localStorage.setItem('om_meta', JSON.stringify(OM.META)); } catch (e) {} };
-  // partida en curso (v1.1): se guarda entre mesas; continuar vuelve al mapa o a la tienda
-  OM.saveRun = (scene, extra) => { try { if (OM.R) localStorage.setItem('om_run', OM.Run.serialize(OM.R, scene, extra)); } catch (e) { console.error('saveRun', e); } };
-  OM.clearRun = () => { try { localStorage.removeItem('om_run'); } catch (e) {} };
-  OM.hasRun = () => { try { return !!localStorage.getItem('om_run'); } catch (e) { return false; } };
-  OM.loadRun = () => {
-    try {
-      const s = localStorage.getItem('om_run'); if (!s) return null;
-      const res = OM.Run.deserialize(s);
-      if (!res) { OM.clearRun(); return null; }
-      return res;
-    } catch (e) { console.error('loadRun', e); OM.clearRun(); return null; }
-  };
 
   // ---------- entrada ----------
-  const IN = OM.IN = { mx: -99, my: -99, down: false, pressed: false, released: false, rpressed: false, wheel: 0, keys: {}, kp: {}, pressX: 0, pressY: 0, touch: false, consumed: false };
+  const IN = OM.IN = { mx: -99, my: -99, down: false, pressed: false, released: false, rpressed: false, wheel: 0, keys: {}, kp: {}, typed: '', pressX: 0, pressY: 0, touch: false, consumed: false };
   let scale = 2, offX = 0, offY = 0;
   function toLocal(cx, cy) {
     const r = screen.getBoundingClientRect();
@@ -51,6 +40,7 @@ window.OM = window.OM || {};
     unlockAudio();
     if (!IN.keys[e.code]) IN.kp[e.code] = true;
     IN.keys[e.code] = true;
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) IN.typed += e.key;
     if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   });
   window.addEventListener('keyup', (e) => { IN.keys[e.code] = false; });
@@ -96,12 +86,10 @@ window.OM = window.OM || {};
 
   // colorea descripciones: "+4 Mult" rojo, "Fichas" azul, "$" oro
   OM.colorize = (s) => s
-    .replace(/((?:\+|x)\s?[\d.]+\s?Mult)/g, '{c}$1{/}')
-    .replace(/(x[\d.]+)(?! Mult)/g, '{c}$1{/}')
-    .replace(/(\+\d+\s?Fichas)/g, '{q}$1{/}')
-    .replace(/(\$\d+)/g, '{h}$1{/}')
-    .replace(/\b(LISA|LISAS|RAYADA|RAYADAS|ESQUINA|LATERALES|SIMPLE|DOBLETE|TRIPLETE|MASACRE|MESA LIMPIA|ORO|CRISTAL|PLOMO|FUEGO|HOLO|BOMBA)\b/g, '{i}$1{/}')
-    .replace(/\{i\}/g, '{h}');
+    .replace(/((?:\+|x)\s?[\d.]+\s?Combo)/g, '{c}$1{/}')
+    .replace(/(x[\d.]+)(?! Combo)/g, '{c}$1{/}')
+    .replace(/(\+\d+\s?Puntos)/g, '{q}$1{/}')
+    .replace(/\b(ACTIVO|LISA|LISAS|RAYADA|RAYADAS|ESQUINA|LATERALES|BANDA|COMBINACIÓN|TACADA|SALTO|SALTOS|MASSÉ|MASSÉS|ORO|RIVAL|ROBA|FALTA|FALLO|EFECTO)\b/g, '{h}$1{/}');
 
   OM.fmt = (n) => {
     n = Math.floor(n);
@@ -167,19 +155,17 @@ window.OM = window.OM || {};
       if (!IN.touch) OM.UI.cursor(ctx, Math.round(IN.mx), Math.round(IN.my), G.cursor);
     } catch (err) {
       console.error(err);
-      try { OM.LOG.error(OM.R, (OM.sceneName || '?') + ': ' + (err && err.stack ? err.stack.split(String.fromCharCode(10)).slice(0, 3).join(' | ') : err)); } catch (e) {}
+      OM.lastError = String(err && err.stack || err);
       ctx.fillStyle = '#300'; ctx.fillRect(0, 0, W, 12);
       ctx.fillStyle = '#fff'; ctx.font = '8px monospace'; ctx.fillText(String(err).slice(0, 120), 4, 9);
     }
     // global keys
-    if (IN.kp.KeyM) { OM.META.music = !OM.META.music; OM.saveMeta(); OM.music(OM._track); }
+    if (IN.kp.KeyM && !OM.typing) { OM.META.music = !OM.META.music; OM.saveMeta(); OM.music(OM._track); }
     sctx.setTransform(1, 0, 0, 1, 0, 0);
     OM.FX.post(buf.c, sctx, screen.width, screen.height, t, { crt: OM.META.crt });
-    IN.pressed = IN.released = IN.rpressed = false; IN.wheel = 0; IN.kp = {};
+    IN.pressed = IN.released = IN.rpressed = false; IN.wheel = 0; IN.kp = {}; IN.typed = '';
     requestAnimationFrame(frame);
   }
-
-  window.addEventListener('error', (e) => { try { OM.LOG.error(OM.R, 'window: ' + e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); } catch (x) {} });
 
   OM.boot = function () {
     (OM.ART_INIT || []).forEach((fn) => { try { fn(); } catch (e) { console.error('ART_INIT', e); } });
