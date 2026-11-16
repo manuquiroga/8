@@ -65,3 +65,18 @@
 - Tienda: **USAR YA** compra y usa en un clic las lunas, grabados y arcanos que se pueden usar fuera de la mesa, aunque no quede hueco de consumible.
 - Sobre Maldito con la fila llena: la fila de comodines queda por encima del sobre y se puede vender uno para hacer hueco.
 - Pendiente de datos reales: los jefes "físicos" (Péndulo, Ciénaga, Escarcha, Sepulturero) salen FÁCIL en el bot porque el bot no simula la física. La Sanguijuela sí es fácil de verdad (solo cuesta dinero).
+
+## 2026-11-16 · v1.2 — Saque libre + Carga
+**Problema (playtest)**: "gano hiper fácil del saque; si fallo el saque (blanca u 8) se siente injusto".
+**Medición**:
+- Con la física real, un saque a fondo mete 1,9 bolas de media (10% ninguna, 37% tres o más) con 11% de faltas. El bot ahora usa esa distribución.
+- Con las reglas v1.1, **el 60% de las mesas se ganaban solo con el saque**. Se superaba la mesa el 97% tras un saque bueno y el 73-81% tras uno vacío o malo.
+
+**Cambio**: el saque no gasta tiro ni puntúa. Cada bola da +2 Mult de CARGA para el próximo tiro que puntúe. La falta en el saque es bola en mano sin castigo y la 8 vuelve sin maldición. Martillo de Hueso: la carga vale el triple. Primera Sangre: el primer tiro tras el saque.
+
+**Resultado (bot, 4000 partidas)**:
+- Mesas ganadas solo con el saque: 60% → 0%.
+- Supera la mesa según el saque: bueno 92%, normal 88%, vacío 89%, malo 92%. El saque ya no decide la mesa.
+- Objetivos reajustados a 140 / 460 / 1.100 / 2.400 / 4.800 / 9.200. Victorias: flojo 0,8%, medio 5%, bueno 16%.
+- Nuevas métricas en el análisis: justicia del saque (pasa la mesa según cómo salió el saque) y la bandera SAQUE.
+- `tools/bot.js --oldbreak` juega con las reglas v1.1 para comparar, y `--carga k` escala la carga.

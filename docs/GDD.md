@@ -26,6 +26,7 @@ Elegir Taco ─► Mapa del círculo ─► Mesa (tiros) ─► Cobro ─► Tie
 ```
 - **Run**: 6 círculos × 3 mesas = 18 mesas. Ganar el Jefe del círculo VI = victoria. Tras la victoria: modo **Infinito** (objetivos ×2.2 por círculo).
 - **Mesa**: tus 15 bolas se colocan en triángulo; tienes N tiros (5 por defecto) para alcanzar el objetivo. Las bolas embocadas desaparecen de la mesa (no de tu set). Si la mesa se vacía, se vuelve a montar.
+- **Saque libre (v1.2)**: el saque (y cada nuevo triángulo) **no gasta tiro ni puntúa**. Cada bola que entra en el saque da **+2 Mult de CARGA**, que se suma al próximo tiro que puntúe (no se pierde por fallar). La falta en el saque solo da bola en mano y la 8 en el saque vuelve al punto sin maldición. Motivo: en v1.1 el 60% de las mesas se ganaban solo con el saque, y fallarlo se sentía injusto.
 - **Derrota**: acabar los tiros sin alcanzar el objetivo. Permadeath.
 
 ## 4. Puntuación
@@ -33,7 +34,8 @@ Elegir Taco ─► Mapa del círculo ─► Mesa (tiros) ─► Cobro ─► Tie
 - **Tipo de tiro** por nº de bolas embocadas: Simple (1), Doblete (2), Triplete (3), Masacre (4+), Mesa Limpia (8 negra como última bola). Cada tipo tiene nivel (Lunas Negras).
 - **Fichas por bola** = número de la bola × 5 (las rayadas valen más que las lisas).
 - **Banda**: bola que tocó banda antes de entrar → +10 fichas.
-- **La 8 maldita**: meterla antes de tiempo = **MALDICIÓN**: el tiro puntúa 0 y la 8 vuelve al punto. Meterla la última = Mesa Limpia.
+- **Racha**: cada tiro seguido que emboca suma +1 Mult (máx. +8). El saque no la rompe.
+- **La 8 maldita**: meterla antes de tiempo (fuera del saque) = **MALDICIÓN**: el tiro puntúa 0 y la 8 vuelve al punto. Meterla la última = Mesa Limpia.
 - **Falta (blanca dentro)**: el tiro puntúa 0 y la siguiente es bola en mano.
 - Orden de evaluación (visible, animado): tipo de tiro → cada bola (y sus grabados, y comodines `onBall` de izquierda a derecha) → comodines `onShot` de izquierda a derecha → total.
 

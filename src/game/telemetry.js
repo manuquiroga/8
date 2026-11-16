@@ -127,12 +127,13 @@ OM.LOG = (function () {
       balls: shotIn.balls.map((b) => b.ball.num + (b.ball.kind !== 'normal' ? ':' + b.ball.kind : '') + (b.banked ? 'B' : '') + (b.pocket && !b.pocket.corner ? 'L' : '')),
       type: S.typeId || null, chips: Math.round(S.chips || 0), mult: Math.round((S.mult || 0) * 100) / 100, total: S.total,
       scratch: !!shotIn.scratch, cursed: !!shotIn.cursed, clear: !!shotIn.clear, isBreak: !!shotIn.isBreak,
-      streak: shotIn.streak || 0, spun: !!shotIn.spun, cushions: shotIn.cueCushions, contacts: shotIn.cueContacts,
+      streak: shotIn.streak || 0, cargaIn: shotIn.carga || 0, spun: !!shotIn.spun, cushions: shotIn.cueCushions, contacts: shotIn.cueContacts,
       money, contrib: contributions(R, shotIn, S.total),
     };
     if (extra) Object.assign(rec, extra);
     tb.shots.push(rec);
-    tb.score += S.total; tb.shotsUsed++;
+    if (S.isFreeBreak) { rec.freeBreak = true; rec.carga = S.carga; } else tb.shotsUsed++;
+    tb.score += S.total;
   }
 
   function tableEnd(R, won, T, cashout) {

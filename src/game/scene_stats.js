@@ -7,7 +7,7 @@ OM.SCENES = OM.SCENES || {};
   const TABS = [['resumen', 'RESUMEN'], ['banderas', 'BANDERAS'], ['comodines', 'COMODINES'], ['mesas', 'MESAS'], ['partidas', 'PARTIDAS']];
   const SOURCES = [[null, 'TODAS'], ['human', 'MÍAS'], ['bot', 'BOT']];
   const P = (x) => Math.round(x * 100) + '%';
-  const FLAGC = { 'ROTO': 'c', 'INÚTIL': '6', 'IGNORADO': '6', 'DIFÍCIL': 'b', 'FÁCIL': 'm', 'FALTAS': 'v', 'DOBLETES': 'v', 'AHORRO': 'h' };
+  const FLAGC = { 'SAQUE': 'v', 'ROTO': 'c', 'INÚTIL': '6', 'IGNORADO': '6', 'DIFÍCIL': 'b', 'FÁCIL': 'm', 'FALTAS': 'v', 'DOBLETES': 'v', 'AHORRO': 'h' };
   const LIST = { x: 16, y: 74, w: 608, h: 240, lh: 12 };
 
   OM.SCENES.stats = {

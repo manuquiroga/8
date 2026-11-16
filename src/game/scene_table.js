@@ -85,7 +85,7 @@ OM.SCENES = OM.SCENES || {};
         target: OM.Run.target(R), boss, guide: boss === 'ciego' ? 0 : M.guide, cur: null, play: null, endT: 0,
         chips: 0, mult: 0, shotName: '', shotColor: '7', bump: { c: 0, m: 0 }, multStr: '0',
         showBalls: false, paused: false, lastHit: 0, cashout: null, msg: null, t0: OM.time, aimKey: false,
-        spin: { f: 0, s: 0 }, streak: 0,
+        spin: { f: 0, s: 0 }, streak: 0, carga: 0,
       };
       T.remaining = () => {
         const onTable = new Set(T.W.balls.filter((b) => b.alive && b.num !== 0).map((b) => b.src));
@@ -265,7 +265,7 @@ OM.SCENES = OM.SCENES || {};
     T.cur = {
       pocketed: [], scratch: false, cueContacts: new Set(), cueCushions: 0, banked: new Set(), eight: false,
       spun: Math.hypot(T.spin.f, T.spin.s) > 0.2,
-      isBreak: T.W.balls.filter((b) => b.alive && b.num !== 0).length === R.balls.length && T.shotIndex === 0,
+      isBreak: T.W.balls.filter((b) => b.alive && b.num !== 0).length === R.balls.length,
     };
     T._lastRemaining = null;
     T.phase = 'rolling';
@@ -332,12 +332,13 @@ OM.SCENES = OM.SCENES || {};
     const cursed = cur.eight && remainingObj > 0;
     const clear = cur.eight && remainingObj === 0 && !cur.scratch;
     T._lastRemaining = new Set(T.W.balls.filter((b) => b.alive && b.num !== 0).map((b) => b.src));
-    T.shots--;
+    if (!cur.isBreak) T.shots--; // SAQUE LIBRE: no gasta tiro
     const shot = {
       balls: cur.pocketed, scratch: cur.scratch, cueContacts: cur.cueContacts.size, cueCushions: cur.cueCushions,
-      shotIndex: T.shotIndex, shotsLeft: T.shots, isBreak: cur.isBreak, ballsLeft: remainingObj, cursed, clear, streak: T.streak, spun: cur.spun,
+      shotIndex: T.shotIndex, shotsLeft: T.shots, isBreak: cur.isBreak, ballsLeft: remainingObj, cursed, clear, streak: T.streak, spun: cur.spun, carga: T.carga,
     };
-    const S = OM.Run.score(R, shot);
+    const S = cur.isBreak ? OM.Run.breakShot(R, shot) : OM.Run.score(R, shot);
+    if (cur.isBreak) T.carga += S.carga; else if (S.usedCarga) T.carga = 0;
     OM.LOG.shot(R, shot, S, { power: Math.round(T.strikePow * 100) / 100, spinF: T.spin.f, spinS: T.spin.s, left: T.shots });
     T.S = S;
     T.play = { i: 0, timer: 0.25, events: S.events, done: false, totalT: 0 };
@@ -378,6 +379,7 @@ OM.SCENES = OM.SCENES || {};
           P.timer = 0.35;
           break;
         }
+        case 'carga': OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2 + 4, 'CARGA +' + e.v + ' MULT', 'q', { size: 2 }); OM.sfx('mult', { pitch: 1.2 }); OM.FX.burst(F.x + F.w / 2, F.y + F.h / 2, 'spark', 12); P.timer = 0.5; break;
         case 'chips': T.chips += e.v; T.bump.c = 1; OM.FX.popText(p.x, p.y, '+' + OM.fmt(e.v), 'q'); OM.sfx('chips', { pitch }); break;
         case 'mult': T.mult += e.v; T.multStr = fmtMult(T.mult); T.bump.m = 1; OM.FX.popText(p.x, p.y, '+' + e.v + ' Mult', 'c'); OM.sfx('mult', { pitch }); break;
         case 'xmult': T.mult *= e.v; T.multStr = fmtMult(T.mult); T.bump.m = 1.6; OM.FX.popText(p.x, p.y, 'x' + (Math.round(e.v * 100) / 100), 'c', { size: 2 }); OM.sfx('xmult', { pitch }); OM.FX.shake(2, 0.15); P.timer += 0.08; break;
@@ -416,20 +418,20 @@ OM.SCENES = OM.SCENES || {};
     OM.Run.afterShot(R, S);
     R.stats.balls += cur.pocketed.length;
     // cristal: puede romperse
+    const free = !!S.isFreeBreak;
     cur.pocketed.forEach((pb) => {
-      if (pb.ball.kind === 'cristal' && R.rng() < 0.25) {
+      if (!free && pb.ball.kind === 'cristal' && R.rng() < 0.25) {
         const i = R.balls.indexOf(pb.ball);
         if (i >= 0) R.balls.splice(i, 1);
         OM.FX.burst(pb.pocket.x, pb.pocket.y, 'shard', 20); OM.sfx('glass_break');
         OM.FX.popText(pb.pocket.x, pb.pocket.y - 14, '¡ROTA!', 'r');
       }
     });
-    if (T.boss === 'verdugo' && (cur.scratch || !cur.pocketed.length)) { T.shots = Math.max(0, T.shots - 1); OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2 + 24, 'EL VERDUGO: -1 TIRO', 'b', { size: 2 }); }
-    T.shotIndex++;
-    T.streak = S.total > 0 ? T.streak + 1 : 0;
+    if (!free && T.boss === 'verdugo' && (cur.scratch || !cur.pocketed.length)) { T.shots = Math.max(0, T.shots - 1); OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2 + 24, 'EL VERDUGO: -1 TIRO', 'b', { size: 2 }); }
+    if (!free) { T.shotIndex++; T.streak = S.total > 0 ? T.streak + 1 : 0; }
     if (T.streak > (OM.META.maxStreak || 0)) { OM.META.maxStreak = T.streak; OM.saveMeta(); }
     // Segunda Oportunidad: el primer tiro fallido de la mesa no gasta tiro
-    if (!T.refunded && !cur.pocketed.length && !cur.scratch && OM.Run.mods(R).refundMiss && T.shots >= 0) {
+    if (!free && !T.refunded && !cur.pocketed.length && !cur.scratch && OM.Run.mods(R).refundMiss && T.shots >= 0) {
       T.refunded = true; T.shots++;
       const J = R.jokers.find((j) => j.id === 'segunda'); if (J) OM.HUD.bump(J.uid);
       OM.FX.popText(F.x + F.w / 2, F.y + F.h / 2, '¡TIRO RECUPERADO!', 'm', { size: 2 }); OM.sfx('level_up');
@@ -490,6 +492,15 @@ OM.SCENES = OM.SCENES || {};
     OM.go('shop');
   }
 
+  function aimLabel() {
+    const isBreak = T.W.balls.filter((b) => b.alive && b.num !== 0).length === OM.R.balls.length;
+    if (isBreak) return 'SAQUE LIBRE';
+    const p = [];
+    if (T.carga) p.push('CARGA +' + T.carga);
+    if (T.streak) p.push('RACHA +' + Math.min(8, T.streak));
+    return p.length ? p.join(' · ') + ' Mult' : 'apunta...';
+  }
+
   // ---------------- dibujo ----------------
   function drawTable(ctx, t) {
     const R = OM.R, W = T.W, G = OM.G, IN = OM.IN;
@@ -542,7 +553,7 @@ OM.SCENES = OM.SCENES || {};
       title: (T.boss ? OM.bossDef(T.boss).name : OM.TABLE_KINDS[R.tableIdx].name).toUpperCase(),
       bossId: T.boss, target: T.target, score: T.score, scoreShown: T.scoreShown,
       sub: T.boss ? null : 'Recompensa: $' + OM.TABLE_KINDS[R.tableIdx].reward,
-      shotName: T.shotName || (T.phase === 'aim' ? (T.streak ? 'RACHA x' + (T.streak + 1) + ' · +' + Math.min(8, T.streak) + ' Mult' : 'apunta...') : ''), shotColor: T.shotName ? T.shotColor : T.streak ? 'v' : '5',
+      shotName: T.shotName || (T.phase === 'aim' ? aimLabel() : ''), shotColor: T.shotName ? T.shotColor : T.carga ? 'q' : T.streak ? 'v' : '5',
       chips: T.chips, mult: T.mult, multStr, bump: T.bump, shots: T.shots,
       buttons(y) {
         if (G.button(L.panel.x + 8, y, 80, 16, 'BOLAS', 'blue')) { T.showBalls = true; }
@@ -561,7 +572,7 @@ OM.SCENES = OM.SCENES || {};
     } else {
       let hint = '';
       const hx = B.x + (B.w - 84) / 2;
-      if (T.phase === 'place') hint = T.placeAny ? 'BOLA EN MANO · clic para colocar la blanca' : 'SAQUE · coloca la blanca tras la línea y haz clic';
+      if (T.phase === 'place') hint = T.placeAny ? 'BOLA EN MANO · clic para colocar la blanca' : 'SAQUE LIBRE · no gasta tiro · cada bola = +2 Mult de carga';
       else if (T.phase === 'aim') hint = 'Apunta · mantén pulsado, arrastra atrás y suelta';
       else if (T.phase === 'rolling') hint = '...';
       if (hint) OM.FONT.draw(ctx, hint, hx, B.y + 12, { color: '6', align: 'center' });

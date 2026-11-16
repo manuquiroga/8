@@ -84,7 +84,7 @@ OM.Run = (function () {
     return J;
   }
   function mods(R) {
-    const m = { extraShots: 0, pocketMul: 1, powerMul: 1, guide: 1, pocketPull: 1, noScratch: false, eightSafe: false, scratchScores: false, retriggerFirst: false, refundMiss: false };
+    const m = { breakMul: 1, extraShots: 0, pocketMul: 1, powerMul: 1, guide: 1, pocketPull: 1, noScratch: false, eightSafe: false, scratchScores: false, retriggerFirst: false, refundMiss: false };
     R.jokers.forEach((_, i) => {
       const J = resolve(R, i); if (!J || !J.def.mods) return;
       const d = J.def.mods;
@@ -93,6 +93,7 @@ OM.Run = (function () {
       if (d.powerMul) m.powerMul *= d.powerMul;
       if (d.guide) m.guide = Math.max(m.guide, d.guide);
       if (d.pocketPull) m.pocketPull *= d.pocketPull;
+      if (d.breakMul) m.breakMul *= d.breakMul;
       ['noScratch', 'eightSafe', 'scratchScores', 'retriggerFirst', 'refundMiss'].forEach((k) => { if (d[k]) m[k] = true; });
     });
     return m;
@@ -145,6 +146,12 @@ OM.Run = (function () {
     S.chips = T.chips + T.lvlChips * (lvl - 1);
     S.mult = T.mult + T.lvlMult * (lvl - 1);
     ev.push({ k: 'type', v: typeId, lvl, chips: S.chips, mult: S.mult });
+    // CARGA DEL SAQUE (v1.2): se gasta en el primer tiro que puntúa
+    if (shot.carga > 0) {
+      ev.push({ k: 'msg', v: 'CARGA DEL SAQUE', color: 'q' });
+      S.add({ mult: shot.carga });
+      S.usedCarga = true;
+    }
     // RACHA (v1.1): cada tiro anterior seguido que embocó suma +1 Mult (máx. +8)
     if (shot.streak > 0) {
       ev.push({ k: 'msg', v: 'RACHA x' + (shot.streak + 1), color: 'v' });
@@ -182,6 +189,22 @@ OM.Run = (function () {
     if (bossId_ === 'sanguijuela') ev.push({ k: 'money', v: -1, src: { type: 'boss' } });
     S.total = Math.floor(S.chips * S.mult);
     return S;
+  }
+
+  // ---- SAQUE LIBRE (v1.2) ----
+  // El saque no gasta tiro ni puntúa: cada bola embocada da +2 Mult de CARGA para el próximo tiro que puntúe.
+  // (calibrado con tools/bot.js: +2 mantiene las victorias de v1.1 y elimina la dependencia del saque)
+  // Falta en el saque = bola en mano sin penalización. La 8 en el saque vuelve al punto sin maldición.
+  const CARGA_POR_BOLA = 2;
+  function breakShot(R, shot) {
+    const M = mods(R), ev = [];
+    const n = shot.balls.filter((b) => b.ball.num !== 8).length;
+    const carga = n * CARGA_POR_BOLA * M.breakMul;
+    ev.push({ k: 'msg', v: n ? '¡SAQUE!' : 'SAQUE VACÍO', color: n ? 'n' : '6' });
+    if (carga) ev.push({ k: 'carga', v: carga });
+    if (shot.scratch) ev.push({ k: 'msg', v: 'BOLA EN MANO', color: '7' });
+    if (shot.balls.some((b) => b.ball.num === 8)) ev.push({ k: 'msg', v: 'LA 8 VUELVE', color: '6' });
+    return Object.assign({}, shot, { events: ev, total: 0, chips: 0, mult: 0, carga, isFreeBreak: true, balls: [], cursed: false, scratch: false });
   }
 
   // efectos de comodín que no dependen de embocar (dinero por tiro, etc.) se ejecutan en score.
@@ -285,5 +308,5 @@ OM.Run = (function () {
     return { R, scene: o.scene, extra: o.extra };
   }
 
-  return { create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker, rollEdition, slots, jokersFull, serialize, deserialize };
+  return { breakShot, create, target, circleDef, bossId, isBoss, boss, mods, score, afterShot, cashout, sellPrice, makeShop, openPack, newJoker, randomJoker, rollEdition, slots, jokersFull, serialize, deserialize };
 })();

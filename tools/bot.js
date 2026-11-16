@@ -31,7 +31,7 @@ if (args.set) String(args.set).split(',').forEach((kv) => { const [p, v] = kv.sp
 OM.META = { best: 9, wins: 9, maxStreak: 20, bosses: 99, seen: {} };
 
 // ---- modelo de tiro ----
-const BREAK = [0.2, 0.35, 0.3, 0.15];
+const BREAK = [0.10, 0.33, 0.28, 0.20, 0.09]; // medido con la física real a potencia máxima (media 1,9 bolas, 11% faltas)
 const SKILLS = { flojo: [0.5, 0.45, 0.05, 0], medio: [0.38, 0.54, 0.07, 0.01], bueno: [0.28, 0.6, 0.1, 0.02] };
 const BOSS_MISS = { boca: 1.6, sepulturero: 1.25, niebla: 1.3, ciego: 1.35, pendulo: 1.2, cienaga: 1.1, escarcha: 1.15 };
 function dist(R, T, isBreak) {
@@ -52,12 +52,13 @@ function playTable(R) {
   for (let i = R.items.length - 1; i >= 0; i--) if (R.items[i] === 'tiza') { OM.LOG.item(R, 'tiza', 'table'); R.items.splice(i, 1); T.shots++; }
   R.jokers.forEach((J) => J.def.onTableStart && J.def.onTableStart(R, J));
   OM.LOG.tableStart(R, T);
-  let onTable = R.balls.slice(), shotIndex = 0;
+  let onTable = R.balls.slice(), shotIndex = 0, carga = 0;
+  const FREE = !args.oldbreak; // --oldbreak: reglas de saque v1.1 (para comparar)
   while (T.shots > 0 && T.score < T.target) {
     if (!onTable.length) onTable = R.balls.slice();
-    const isBreak = shotIndex === 0 || onTable.length === R.balls.length;
-    let n = Math.min(pick(rng, dist(R, T, isBreak && shotIndex === 0)), onTable.length);
-    const scratch = !M.noScratch && rng() < (isBreak ? 0.08 : 0.06);
+    const isBreak = FREE ? onTable.length === R.balls.length : shotIndex === 0;
+    let n = Math.min(pick(rng, dist(R, T, isBreak)), onTable.length);
+    const scratch = !M.noScratch && rng() < (isBreak ? 0.11 : 0.06);
     // las bolas: no la 8 salvo que sea la última (o maldición rara)
     const pool = rng.shuffle(onTable.filter((b) => b.num !== 8));
     let balls = pool.slice(0, n);
@@ -68,11 +69,21 @@ function playTable(R) {
     const shot = {
       balls: balls.map((b) => ({ ball: b, pocket: { corner: rng() < 0.67, x: 0, y: 0 }, banked: rng() < 0.15 })),
       scratch, cueContacts: 1 + (rng() < 0.4 ? 1 : 0) + (rng() < 0.15 ? 1 : 0), cueCushions: Math.floor(rng() * 4),
-      shotIndex, shotsLeft: T.shots - 1, isBreak: shotIndex === 0, ballsLeft: onTable.length - balls.length, cursed, clear,
+      shotIndex, shotsLeft: T.shots - 1, isBreak, carga, ballsLeft: onTable.length - balls.length, cursed, clear,
       streak: T.streak, spun: rng() < 0.35,
     };
+    if (FREE && isBreak) {
+      // SAQUE LIBRE: no gasta tiro ni puntúa; carga +1 Mult por bola; la 8 vuelve; falta sin castigo
+      const S = OM.Run.breakShot(R, shot);
+      OM.LOG.shot(R, shot, S, { left: T.shots });
+      carga += S.carga * (+args.carga || 1); // --carga k: experimento
+      onTable = onTable.filter((b) => !balls.includes(b) || b.num === 8);
+      R.stats.balls += balls.length;
+      continue;
+    }
     T.shots--;
     const S = OM.Run.score(R, shot);
+    if (S.usedCarga) carga = 0;
     OM.LOG.shot(R, shot, S, { left: T.shots });
     S.events.forEach((e) => { if (e.k === 'money') R.money += e.v; });
     T.score += S.total;

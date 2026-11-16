@@ -36,6 +36,8 @@ OM.Analytics = (function () {
       jokers: {}, tables: {}, bosses: {}, cues: {}, editions: {}, items: {},
       shots: { total: 0, n0: 0, n1: 0, n2: 0, n3: 0, scratch: 0, cursed: 0, spun: 0, spunHit: 0, plainHit: 0, plain: 0, maxStreak: 0, refunds: 0, bestShot: 0 },
       econ: { shopIn: {}, spent: 0, shops: 0, rerolls: 0, unspentAtDeath: [] },
+      // justicia del saque: resultado de la mesa según cómo salió el saque
+      brk: { bueno: { n: 0, won: 0, share: [] }, normal: { n: 0, won: 0, share: [] }, vacio: { n: 0, won: 0, share: [] }, malo: { n: 0, won: 0, share: [] }, wonOnBreak: 0, tables: 0 },
       flags: [],
     };
     const baseline = avg(done.map(reachScore));
@@ -58,6 +60,15 @@ OM.Analytics = (function () {
         T.plays++; if (tb.won) T.won++; T.ratio.push(tb.target ? tb.score / tb.target : 0); T.shotsUsed.push(tb.shotsUsed); T.jokers.push(tb.jokers.length);
         if (tb.boss) { const B = (R.bosses[tb.boss] = R.bosses[tb.boss] || { id: tb.boss, plays: 0, won: 0, ratio: [] }); B.plays++; if (tb.won) B.won++; B.ratio.push(tb.score / tb.target); }
         R.shots.refunds += tb.refunds || 0;
+        const b0 = tb.shots.find((s) => s.isBreak);
+        if (b0) {
+          const g = b0.scratch || b0.cursed ? 'malo' : b0.n >= 2 ? 'bueno' : b0.n === 1 ? 'normal' : 'vacio';
+          const B = R.brk[g]; B.n++; if (tb.won) B.won++;
+          B.share.push(tb.target ? Math.min(3, (b0.total || 0) / tb.target) : 0);
+          R.brk.tables++;
+          if (tb.won && (b0.freeBreak ? tb.shotsUsed === 0 : tb.shotsUsed <= 1)) R.brk.wonOnBreak++;
+          if (tb.won && tb.shotsUsed <= (b0.freeBreak ? 1 : 2)) R.brk.quick = (R.brk.quick || 0) + 1;
+        }
         (tb.itemsUsed || []).forEach((id) => { R.items[id] = (R.items[id] || 0) + 1; });
         tb.jokers.forEach((k) => { if (!held.has(base(k))) held.set(base(k), wonSoFar); const ed = k.split('+')[1]; if (ed) R.editions[ed] = (R.editions[ed] || 0) + 1; });
         if (tb.won) wonSoFar++;
@@ -129,6 +140,10 @@ OM.Analytics = (function () {
       scratch: pct(S.scratch, S.total), cursed: pct(S.cursed, S.total), spinUse: pct(S.spun, S.total),
       spinHit: pct(S.spunHit, S.spun), plainHit: pct(S.plainHit, S.plain),
     };
+    R.brkRates = Object.fromEntries(['bueno', 'normal', 'vacio', 'malo'].map((k) => [k, { n: R.brk[k].n, pass: pct(R.brk[k].won, R.brk[k].n), share: avg(R.brk[k].share) }]));
+    R.brkRates.wonOnBreak = pct(R.brk.wonOnBreak, R.brk.tables);
+    R.brkRates.quick = pct(R.brk.quick || 0, R.brk.tables);
+    R.brkRates.gap = R.brkRates.bueno.pass - R.brkRates.malo.pass;
     R.econ.shopInAvg = Object.fromEntries(Object.entries(R.econ.shopIn).map(([k, v]) => [k, Math.round(avg(v))]));
     R.econ.rerollsPerShop = pct(R.econ.rerolls, R.econ.shops);
     R.econ.unspentAvg = avg(R.econ.unspentAtDeath);
@@ -142,6 +157,8 @@ OM.Analytics = (function () {
       text: b.name + ': ' + b.flag + ' · supera ' + Math.round(b.pass * 100) + '% de ' + b.plays }));
     if (S.total >= 50 && R.shotRates.scratch > 0.12) R.flags.push({ kind: 'mech', flag: 'FALTAS', text: 'Faltas en ' + Math.round(R.shotRates.scratch * 100) + '% de los tiros' });
     if (S.total >= 50 && R.shotRates.two + R.shotRates.threePlus < 0.03) R.flags.push({ kind: 'mech', flag: 'DOBLETES', text: 'Solo ' + ((R.shotRates.two + R.shotRates.threePlus) * 100).toFixed(1) + '% de tiros con 2+ bolas: los comodines de dobletes casi no se activan' });
+    if (R.brk.tables >= 30 && R.brkRates.wonOnBreak > 0.15) R.flags.push({ kind: 'mech', flag: 'SAQUE', text: 'El ' + Math.round(R.brkRates.wonOnBreak * 100) + '% de las mesas se ganan solo con el saque' });
+    if (R.brk.malo.n >= 15 && R.brkRates.gap > 0.2) R.flags.push({ kind: 'mech', flag: 'SAQUE', text: 'Tras un saque bueno se gana el ' + Math.round(R.brkRates.bueno.pass * 100) + '%, tras uno malo (falta/8) el ' + Math.round(R.brkRates.malo.pass * 100) + '%' });
     if (R.econ.unspentAtDeath.length >= 5 && R.econ.unspentAvg > 15) R.flags.push({ kind: 'econ', flag: 'AHORRO', text: 'Se muere con $' + Math.round(R.econ.unspentAvg) + ' de media sin gastar: la tienda no tienta' });
     R.thresholds = TH;
     return R;
@@ -156,6 +173,8 @@ OM.Analytics = (function () {
     const s = A.shotRates;
     out.push('Tiros: ' + A.shots.total + ' · fallo ' + P(s.miss) + ' · 1 bola ' + P(s.one) + ' · 2 ' + P(s.two) + ' · 3+ ' + P(s.threePlus) + ' · faltas ' + P(s.scratch) + ' · maldición ' + P(s.cursed));
     out.push('Efecto usado en ' + P(s.spinUse) + ' de los tiros (acierto con efecto ' + P(s.spinHit) + ' vs sin ' + P(s.plainHit) + ') · racha máx x' + (A.shots.maxStreak + 1) + ' · mejor tiro ' + A.shots.bestShot);
+    const b = A.brkRates;
+    out.push('Saque: gana la mesa solo con el saque ' + P(b.wonOnBreak) + ' · con saque + 1 tiro ' + P(b.quick) + ' · supera la mesa tras saque bueno(2+) ' + P(b.bueno.pass) + ' · normal(1) ' + P(b.normal.pass) + ' · vacío ' + P(b.vacio.pass) + ' · malo(falta/8) ' + P(b.malo.pass) + ' (n=' + b.malo.n + ') · el saque aporta ' + P(b.bueno.share) + ' del objetivo cuando es bueno');
     out.push('Economía: $ al entrar a la tienda ' + JSON.stringify(A.econ.shopInAvg) + ' · rerolls/tienda ' + A.econ.rerollsPerShop.toFixed(2) + ' · $ sin gastar al morir ' + A.econ.unspentAvg.toFixed(1));
     out.push('', '-- BANDERAS --');
     if (!A.flags.length) out.push('(ninguna con los datos actuales)');

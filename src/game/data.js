@@ -30,7 +30,7 @@ OM.JOKERS = [
     onBall(S, b) { if (isSolid(b.ball)) S.add({ mult: 3 }, this); } },
   { id: 'rayadas', name: 'Rayadas Infames', rarity: 'comun', desc: 'Cada bola RAYADA (9-15) embocada da +30 Fichas.',
     onBall(S, b) { if (isStripe(b.ball)) S.add({ chips: 30 }, this); } },
-  { id: 'primera_sangre', name: 'Primera Sangre', rarity: 'comun', desc: 'El primer tiro de cada mesa: x2 Mult.',
+  { id: 'primera_sangre', name: 'Primera Sangre', rarity: 'comun', desc: 'El primer tiro tras el saque: x2 Mult.',
     onShot(S) { if (S.shotIndex === 0 && S.balls.length) S.add({ xmult: 2 }, this); } },
   { id: 'ultimo_aliento', name: 'Último Aliento', rarity: 'comun', desc: 'El último tiro de la mesa: x3 Mult.',
     onShot(S) { if (S.shotsLeft === 0 && S.balls.length) S.add({ xmult: 3 }, this); } },
@@ -70,8 +70,7 @@ OM.JOKERS = [
     onShot(S) { if (S.balls.length && S.cueCushions >= 3) S.add({ mult: 12 }, this); } },
   { id: 'carronero', name: 'Carroñero', rarity: 'raro', desc: 'Al meter la blanca: ganas $3 y el tiro SÍ puntúa.',
     mods: { scratchScores: true }, onScratch(S) { S.add({ money: 3 }, this); } },
-  { id: 'martillo', name: 'Martillo de Hueso', rarity: 'raro', desc: '+35% de potencia. Saque: x3 Mult.', mods: { powerMul: 1.35 },
-    onShot(S) { if (S.isBreak && S.balls.length) S.add({ xmult: 3 }, this); } },
+  { id: 'martillo', name: 'Martillo de Hueso', rarity: 'raro', desc: '+35% de potencia. La CARGA del saque vale el triple.', mods: { powerMul: 1.35, breakMul: 3 } },
   { id: 'cuenta_atras', name: 'Reloj de Arena', rarity: 'raro', desc: 'x0.5 Mult extra por cada tiro que te quede.',
     onShot(S) { if (S.balls.length && S.shotsLeft > 0) S.add({ xmult: 1 + 0.5 * S.shotsLeft }, this); } },
   { id: 'vampiro', name: 'Vampiro', rarity: 'raro', desc: 'Gana x0.25 Mult por cada bola GRABADA embocada. (Actual: x{v})',
@@ -202,12 +201,12 @@ OM.BOSSES = [
 
 // Círculos (actos). 3 mesas cada uno: Menor, Mayor, Jefe.
 OM.CIRCLES = [
-  { id: 'limbo',    name: 'I · Limbo',     base: 150,   theme: 'limbo' },
-  { id: 'lujuria',  name: 'II · Lujuria',  base: 500,   theme: 'lujuria' },
-  { id: 'gula',     name: 'III · Gula',    base: 1200,  theme: 'gula' },
-  { id: 'avaricia', name: 'IV · Avaricia', base: 2600,  theme: 'avaricia' },
-  { id: 'ira',      name: 'V · Ira',       base: 5200, theme: 'ira' },
-  { id: 'abismo',   name: 'VI · Abismo',   base: 10000, theme: 'abismo' },
+  { id: 'limbo',    name: 'I · Limbo',     base: 140,   theme: 'limbo' },
+  { id: 'lujuria',  name: 'II · Lujuria',  base: 460,   theme: 'lujuria' },
+  { id: 'gula',     name: 'III · Gula',    base: 1100,  theme: 'gula' },
+  { id: 'avaricia', name: 'IV · Avaricia', base: 2400,  theme: 'avaricia' },
+  { id: 'ira',      name: 'V · Ira',       base: 4800, theme: 'ira' },
+  { id: 'abismo',   name: 'VI · Abismo',   base: 9200, theme: 'abismo' },
 ];
 OM.TABLE_KINDS = [
   { id: 'menor', name: 'Mesa Menor', mul: 1, reward: 3 },
