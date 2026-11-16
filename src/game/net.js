@@ -38,11 +38,14 @@ OM.NET = (function () {
     es.onerror = () => { if (es && es.readyState === 2) N.error = N.error || 'Se perdió la conexión con la sala'; };
   }
   // crea sala (anfitrión). Devuelve una promesa con el código.
-  N.host = () => fetch('/net/create', { method: 'POST' }).then((r) => r.json()).then((d) => { open(d.code, 'h'); return d.code; });
+  const OLD = 'El servidor no tiene salas: reinicia node tools/serve.js';
+  N.host = () => fetch('/net/create', { method: 'POST' })
+    .then((r) => { if (!r.ok) throw new Error(OLD); return r.json(); })
+    .then((d) => { if (!d || !/^[A-Z]{4}$/.test(d.code)) throw new Error(OLD); open(d.code, 'h'); return d.code; });
   // se une a una sala existente
   N.join = (code) => {
     code = String(code || '').toUpperCase().trim();
-    return fetch('/net/' + code + '/check').then((r) => { if (!r.ok) throw new Error('No existe la sala ' + code); open(code, 'g'); return code; });
+    return fetch('/net/' + code + '/check').then((r) => r.text().then((t) => { if (!r.ok || t !== 'ok') throw new Error(r.status === 404 && t === '404' ? OLD : 'No existe la sala ' + code); open(code, 'g'); return code; }));
   };
   // envía en orden (cada POST espera al anterior)
   N.send = (m) => {

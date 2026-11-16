@@ -196,7 +196,7 @@ OM.SCENES = OM.SCENES || {};
         this.name = textField(ctx, 'oname', CX - 58, 80, 116, this.name, 10);
         if (G.button(CX - 90, 120, 180, 24, 'CREAR SALA', 'red', this.busy)) {
           this.busy = true; this.err = null;
-          N.host().then(() => { this.state = 'lobby'; this.busy = false; }).catch(() => { this.err = 'No se pudo crear la sala'; this.busy = false; });
+          N.host().then(() => { this.state = 'lobby'; this.busy = false; }).catch((e) => { this.err = (e && e.message) || 'No se pudo crear la sala'; this.busy = false; });
         }
         OM.FONT.draw(ctx, 'o únete con el código de 4 letras de tu rival:', CX, 166, { color: '6', align: 'center' });
         this.code = textField(ctx, 'code', CX - 58, 182, 116, this.code, 4, true);
