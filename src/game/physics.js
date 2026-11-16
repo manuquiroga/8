@@ -1,4 +1,4 @@
-// OCHO MALDITO — física de billar 2D.
+// 8 — física de billar 2D.
 // Bolas como círculos con masa; bandas = bordes del paño con aberturas en las troneras;
 // "mandíbulas" de tronera = puntos de colisión donde termina cada banda.
 window.OM = window.OM || {};

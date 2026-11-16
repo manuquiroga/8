@@ -1,4 +1,4 @@
-// OCHO MALDITO — fuente bitmap propia (OM.FONT).
+// 8 — fuente bitmap propia (OM.FONT).
 // Dos tamaños dibujados a mano:
 //   size 1: 5x7 (mayúsculas 7px, minúsculas x-height 5, descendentes 2)
 //   size 2: "display" 7x11 con trazos de 2px (títulos y números grandes), con degradado arcade.

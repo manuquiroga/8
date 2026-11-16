@@ -1,4 +1,4 @@
-# Devlog — OCHO MALDITO
+# Devlog — 8
 
 ## 2026-11-16 · Día 1
 - Definida la visión: roguelite de billar (bola 8) en un bar infernal, estructura inspirada en Balatro + física à la Peglin.
@@ -13,7 +13,7 @@
 - Balance: jugador medio sin comodines ≈ 470-520 puntos/mesa → objetivos del Círculo I: 250/375/500.
 - Corrección visual: rayadas legibles, logo reubicado, texto de interés, layout de sobres.
 - Playtests automáticos (`tools/playtest.js`, `tools/scenetest.js`): todas las escenas sin errores de consola.
-- Build único `dist/ocho-maldito.html` (≈437 KB) y publicación como Artifact.
+- Build único `dist/8.html` (≈437 KB) y publicación como Artifact.
 
 ### Próximos pasos (backlog)
 - Guardar/continuar partida a mitad de run.

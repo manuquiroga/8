@@ -1,4 +1,4 @@
-// OCHO MALDITO — UI: paneles 9-slice, botones, iconos, cajas de Fichas/Mult, barras,
+// 8 — UI: paneles 9-slice, botones, iconos, cajas de Fichas/Mult, barras,
 // cursor, fondos animados de escena y el LOGO. Ver docs/ART_CONTRACT.md
 // Todo procedural, paleta OM.PAL, coordenadas enteras. Lo estático se cachea en canvases.
 window.OM = window.OM || {};
@@ -1494,7 +1494,7 @@ OM.UI = (function () {
   }
 
   // ================================================================== LOGO
-  // "OCHO" (latón, x4) con la bola 8 cornuda como primera O, y "MALDITO" (sangre, x3) con goteo.
+  // Logo "8": bola 8 cornuda ampliada x2 con aura (las palabras OCHO/MALDITO ya no se dibujan).
   // Las letras salen de la fuente display escaladas con Scale2x/Scale3x (diagonales suaves).
   function glyphMask(text, gap) {
     const GL = OM.FONT.glyphs[2];
@@ -1683,7 +1683,8 @@ OM.UI = (function () {
     // métricas: línea 1 = bola + "CHO"; línea 2 = MALDITO
     LOGO.l1w = S - 6 + LOGO.w1.w - 2 * LOGO.w1.pad;
     LOGO.width = Math.max(LOGO.l1w, LOGO.w2.w - 2 * LOGO.w2.pad);
-    LOGO.height = 142;
+    LOGO.width = LOGO.ball.width * 2;
+    LOGO.height = LOGO.ball.height * 2;
   }
   function logo(ctx, x, y, t) {
     buildLogo();
@@ -1692,69 +1693,16 @@ OM.UI = (function () {
     const prev = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
     const L = LOGO;
-    const w1 = L.w1, w2 = L.w2;
-    // --- línea 2: MALDITO (neón rojo con parpadeo de fallo)
-    const l2x = x - ((w2.w - 2 * w2.pad) >> 1) - w2.pad;
-    const l2y = y + 72 - w2.pad;
-    // patrón de parpadeo de neón defectuoso
-    const cyc = t % 5.2;
-    const flick = (cyc > 3.0 && cyc < 3.08) || (cyc > 3.16 && cyc < 3.2) || (cyc > 4.6 && cyc < 4.64);
-    const glowA = flick ? 0.05 : 0.32 + 0.08 * Math.sin(t * 3.1) + 0.04 * Math.sin(t * 17);
-    ctx.save(); ctx.globalAlpha = glowA;
-    ctx.drawImage(L.glow2, l2x + L.glowPad, l2y + L.glowPad);
-    ctx.restore();
-    ctx.drawImage(w2.c, l2x, l2y);
-    if (flick) { ctx.save(); ctx.globalAlpha = 0.6; ctx.drawImage(L.shade2, l2x, l2y); ctx.restore(); }
-    // goteo de sangre (gota que crece, se estira y cae)
-    L.drips.forEach((d) => {
-      const per = 2.6 + d.sp * 2;
-      const ph = ((t * 0.9 + d.ph * per) % per) / per;
-      const bx = l2x + d.x, by = l2y + d.y - 1;
-      const grow = Math.min(1, ph / 0.62);
-      const len = Math.round(1 + grow * d.len);
-      const R = (xx, yy, ww, hh, c) => { ctx.fillStyle = PAL[c]; ctx.fillRect(xx, yy, ww, hh); };
-      R(bx - 1, by, 4, len + 1, '0');
-      R(bx, by, 2, len, 'b'); R(bx + 1, by, 1, len, 'a');
-      if (ph < 0.62) { // cabeza de la gota colgando
-        const hy = by + len - 1;
-        R(bx - 1, hy - 1, 4, 5, '0'); R(bx - 2, hy, 6, 3, '0');
-        R(bx - 1, hy, 4, 3, 'b'); R(bx, hy - 1, 2, 4, 'b');
-        R(bx + 1, hy + 1, 2, 2, 'a'); R(bx - 1, hy, 1, 1, 'd');
-      } else { // la gota cae y se aleja
-        const f = (ph - 0.62) / 0.38;
-        const yy = by + len + 2 + Math.round(f * f * 46);
-        R(bx - 1, yy - 1, 4, 5, '0');
-        R(bx, yy, 2, 3, 'b'); R(bx, yy, 1, 1, 'd'); R(bx + 1, yy + 2, 1, 1, 'a');
-      }
-    });
-    // --- línea 1: [bola] CHO
-    const S = L.ball.width;
-    const l1x = x - (L.l1w >> 1);
-    const bob = Math.round(Math.sin(t * 2.2) * 1.5);
-    const l1y = y + 18;
-    // aura maldita de la bola
+    // Logo "8": la bola 8 cornuda a x2, con aura maldita, flotación y destello.
+    const SC = 2;
+    const bob = Math.round(Math.sin(t * 2.2) * 2);
+    const bx0 = x - L.ballCx * SC, by0 = y - 4 + bob;
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.7);
-    const by0 = l1y + 22 - L.ballCy + bob;
-    drawHalo(ctx, l1x + L.ballCx, by0 + L.ballCy, 40, 'b', 0.16 + pulse * 0.14);
-    ctx.drawImage(w1.c, l1x + S - 6 - w1.pad, l1y - w1.pad);
-    // barrido de brillo cada 4 s sobre OCHO
-    const sw = (t % 4) / 1.1;
-    if (sw < 1) {
-      const bx = Math.round(-20 + sw * (w1.w + 40));
-      ctx.save();
-      ctx.beginPath();
-      for (let k = 0; k < 6; k++) ctx.rect(l1x + S - 6 - w1.pad + bx + k * 0 - (k) , l1y - w1.pad + k * 8, 6, 8);
-      ctx.rect(l1x + S - 6 - w1.pad + bx + 10, l1y - w1.pad, 2, w1.h);
-      ctx.clip();
-      ctx.globalAlpha = 0.85;
-      ctx.drawImage(L.shine1, l1x + S - 6 - w1.pad, l1y - w1.pad);
-      ctx.restore();
-    }
-    ctx.drawImage(L.ball, l1x, by0);
-    // ojo: destello en la bola
+    drawHalo(ctx, x, by0 + L.ballCy * SC, 84, 'b', 0.18 + pulse * 0.16);
+    ctx.drawImage(L.ball, bx0, by0, L.ball.width * SC, L.ball.height * SC);
     if ((t % 3.3) < 0.25) {
-      const sx = l1x + L.ballCx + 13, sy = by0 + L.ballCy - 14;
-      ctx.fillStyle = PAL['8']; ctx.fillRect(sx, sy - 2, 1, 5); ctx.fillRect(sx - 2, sy, 5, 1);
+      const sx = bx0 + (L.ballCx + 13) * SC, sy = by0 + (L.ballCy - 14) * SC;
+      ctx.fillStyle = PAL['8']; ctx.fillRect(sx, sy - 4, 2, 10); ctx.fillRect(sx - 4, sy, 10, 2);
     }
     ctx.imageSmoothingEnabled = prev;
   }

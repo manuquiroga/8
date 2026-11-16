@@ -1,4 +1,4 @@
-// OCHO MALDITO — bucle principal, entrada, GUI inmediata, persistencia.
+// 8 — bucle principal, entrada, GUI inmediata, persistencia.
 window.OM = window.OM || {};
 
 (function () {

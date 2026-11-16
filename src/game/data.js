@@ -1,4 +1,4 @@
-// OCHO MALDITO — datos de diseño: comodines, arcanos, lunas, tacos, jefes, círculos.
+// 8 — datos de diseño: comodines, arcanos, lunas, tacos, jefes, círculos.
 // Los IDs son el contrato con el arte: cada comodín necesita el sprite `joker_<id>` (32x32),
 // cada consumible `item_<id>` (24x24), cada taco `cue_<id>`, cada jefe `boss_<id>` (32x32).
 // Hooks de comodín (todos opcionales):
@@ -71,7 +71,7 @@ OM.JOKERS = [
     state: () => ({ v: 1 }),
     onShot(S, J) { if (S.balls.length && J.st.v > 1) S.add({ xmult: J.st.v }, J); },
     onAfter(S, J) { J.st.v += 0.25 * S.balls.filter((b) => b.ball.kind !== 'normal').length; } },
-  { id: 'ocho_maldito', name: 'El Ocho Maldito', rarity: 'raro', desc: 'Meter la 8 antes de tiempo NO maldice: da x3 Mult.',
+  { id: 'ocho_maldito', name: 'El 8', rarity: 'raro', desc: 'Meter la 8 antes de tiempo NO maldice: da x3 Mult.',
     mods: { eightSafe: true }, onBall(S, b) { if (b.ball.num === 8) S.add({ xmult: 3 }, this); } },
   { id: 'fantasma', name: 'Blanca Fantasma', rarity: 'raro', desc: 'La blanca no puede caer en las troneras.', mods: { noScratch: true } },
 

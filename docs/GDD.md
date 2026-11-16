@@ -1,4 +1,4 @@
-# OCHO MALDITO — Documento de Diseño (GDD)
+# 8 — Documento de Diseño (GDD)
 
 > *Un roguelite de billar en un bar del infierno. Mete bolas, encadena comodines malditos y desciende los seis círculos.*
 

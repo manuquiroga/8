@@ -1,4 +1,4 @@
-// OCHO MALDITO — HUD compartido: comodines, consumibles, panel izquierdo, selector de bolas.
+// 8 — HUD compartido: comodines, consumibles, panel izquierdo, selector de bolas.
 window.OM = window.OM || {};
 
 OM.HUD = (function () {

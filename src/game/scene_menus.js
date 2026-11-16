@@ -1,4 +1,4 @@
-// OCHO MALDITO — escenas: título, taco, mapa, tienda, sobres, colección, game over, victoria, pausa.
+// 8 — escenas: título, taco, mapa, tienda, sobres, colección, game over, victoria, pausa.
 window.OM = window.OM || {};
 OM.SCENES = OM.SCENES || {};
 
@@ -30,12 +30,12 @@ OM.SCENES = OM.SCENES || {};
       const G = OM.G, M = OM.META;
       OM.UI.drawBackground(ctx, t, 'title');
       OM.UI.logo(ctx, CX, 20, t);
-      OM.FONT.draw(ctx, 'un roguelite de billar en el bar del infierno', CX, 170, { color: '6', align: 'center', shadow: '0' });
+      OM.FONT.draw(ctx, 'un roguelite de billar en el bar del infierno', CX, 184, { color: '6', align: 'center', shadow: '0' });
       const bw = 170, bx = CX - bw / 2;
-      if (G.button(bx, 196, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
-      if (G.button(bx, 224, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
-      if (G.button(bx, 248, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
-      if (G.button(bx + 88, 248, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
+      if (G.button(bx, 204, bw, 22, 'NUEVA PARTIDA', 'red', false, 'Enter')) OM.go('cues');
+      if (G.button(bx, 232, bw, 18, 'COLECCIÓN', 'blue')) OM.go('collection');
+      if (G.button(bx, 256, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
+      if (G.button(bx + 88, 256, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
       const seen = Object.keys(M.seen).length;
       const stats = 'Partidas ' + M.runs + '   ·   Victorias ' + M.wins + '   ·   Mejor círculo ' + (M.best ? ['I', 'II', 'III', 'IV', 'V', 'VI', 'VI+'][Math.min(6, M.best)] : '-') + '   ·   Récord de tiro ' + OM.fmt(M.bestShot) + '   ·   Comodines ' + seen + '/' + OM.JOKERS.length;
       OM.FONT.draw(ctx, stats, CX, 300, { color: '5', align: 'center' });

@@ -1,4 +1,4 @@
-// OCHO MALDITO — Audio 100% procedural (WebAudio). Sin archivos.
+// 8 — Audio 100% procedural (WebAudio). Sin archivos.
 // API (ver docs/ART_CONTRACT.md):
 //   OM.AUDIO.unlock()                         -> llamar tras el primer gesto del usuario
 //   OM.AUDIO.sfx(name, {vol, pitch, pan})     -> efectos (pitch = multiplicador, 1 = normal)

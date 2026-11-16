@@ -1,4 +1,4 @@
-# Tablero de tickets — OCHO MALDITO
+# Tablero de tickets — 8
 
 | Ticket | Título | Estado | Responsable |
 |---|---|---|---|

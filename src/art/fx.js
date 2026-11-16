@@ -1,4 +1,4 @@
-// OCHO MALDITO — FX: partículas, textos flotantes, sacudida, flash, post-proceso CRT y transiciones.
+// 8 — FX: partículas, textos flotantes, sacudida, flash, post-proceso CRT y transiciones.
 // Ver docs/ART_CONTRACT.md. Sin getImageData por frame: todo es composición de canvases.
 window.OM = window.OM || {};
 OM.ART_INIT = OM.ART_INIT || [];

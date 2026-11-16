@@ -1,4 +1,4 @@
-# Arquitectura — OCHO MALDITO
+# Arquitectura — 8
 
 JS sin build, scripts clásicos bajo el global `window.OM`. Se abre `index.html` directamente (file:// o cualquier servidor estático). `tools/build.js` genera un único HTML autocontenido en `dist/`.
 

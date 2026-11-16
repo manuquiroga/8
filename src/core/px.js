@@ -1,4 +1,4 @@
-// OCHO MALDITO — núcleo de píxeles: paleta, layout y registro de sprites.
+// 8 — núcleo de píxeles: paleta, layout y registro de sprites.
 // Todo el arte del juego debe usar ESTA paleta (32 colores). Ver docs/ART_CONTRACT.md
 window.OM = window.OM || {};
 

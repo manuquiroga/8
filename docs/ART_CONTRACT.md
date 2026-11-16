@@ -1,4 +1,4 @@
-# Contrato de arte y audio — OCHO MALDITO
+# Contrato de arte y audio — 8
 
 Este documento es la interfaz entre el motor (`src/game/*`) y los módulos de arte/audio.
 **Si un nombre o una firma de aquí cambia, el juego se rompe.** Puedes añadir cosas, pero no cambiar las firmas.
@@ -37,7 +37,7 @@ src/core/px.js → src/art/font.js → src/art/ui_art.js → src/art/fx.js → s
 - `OM.UI.valueBox(ctx, x, y, w, h, value, kind)` — caja para Fichas (`'chips'` azul) y Mult (`'mult'` rojo) con número grande, como el "chips x mult".
 - `OM.UI.bar(ctx, x, y, w, h, frac, color)` — barra de progreso / potencia.
 - `OM.UI.drawBackground(ctx, t, scene)` — fondo de pantalla completa para escenas sin mesa: `'title'|'shop'|'map'|'gameover'|'victory'`. Animado y atmosférico (debe verse genial: niebla, velas, polvo).
-- `OM.UI.logo(ctx, x, y, t)` — logo **"OCHO MALDITO"** grande (centrado en x), con la bola 8 como "O" o elemento central, animado (brillo, goteo, parpadeo neón). Es la primera impresión del juego: que sea tremendo.
+- `OM.UI.logo(ctx, x, y, t)` — logo **"8"** grande (centrado en x), con la bola 8 como "O" o elemento central, animado (brillo, goteo, parpadeo neón). Es la primera impresión del juego: que sea tremendo.
 - `OM.UI.cursor(ctx, x, y, state)` — cursor propio (`'normal'|'aim'|'grab'`).
 
 ### `OM.FX` (fx.js)

@@ -1,4 +1,4 @@
-// OCHO MALDITO — escena de mesa: apuntar, tirar, simular, puntuar, cobrar.
+// 8 — escena de mesa: apuntar, tirar, simular, puntuar, cobrar.
 window.OM = window.OM || {};
 OM.SCENES = OM.SCENES || {};
 

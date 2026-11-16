@@ -1,4 +1,4 @@
-// OCHO MALDITO — Arte de cartas: comodines, consumibles, jefes, tacos, reversos y sobres.
+// 8 — Arte de cartas: comodines, consumibles, jefes, tacos, reversos y sobres.
 // Contrato: docs/ART_CONTRACT.md (Agente CARTAS). Solo paleta OM.PAL.
 // Registra sprites en OM.ART_INIT: joker_<id> 32x32, item_<id> 24x24, boss_<id> 32x32, cue_<id> 24x24.
 // Expone OM.CARDS.{drawJoker, drawItem, drawBack, drawPack, drawBossMedal}. Todo se cachea en canvases offscreen.

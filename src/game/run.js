@@ -1,4 +1,4 @@
-// OCHO MALDITO — estado de partida, puntuación (Fichas × Mult), comodines, tienda.
+// 8 — estado de partida, puntuación (Fichas × Mult), comodines, tienda.
 window.OM = window.OM || {};
 
 // RNG con semilla (mulberry32)

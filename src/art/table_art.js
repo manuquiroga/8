@@ -1,4 +1,4 @@
-// OCHO MALDITO — arte de MESA: temas por círculo, mesa, troneras, fondos de sala,
+// 8 — arte de MESA: temas por círculo, mesa, troneras, fondos de sala,
 // bolas (con rodadura esférica y grabados), sombras, tacos, guía de tiro, niebla.
 // Contrato: docs/ART_CONTRACT.md (sección "Agente MESA"). Solo paleta OM.PAL.
 window.OM = window.OM || {};
