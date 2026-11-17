@@ -17,7 +17,8 @@ OM.SCENES = OM.SCENES || {};
     OM.UI.panel(ctx, x, y, w, h, 'dark');
     OM.FONT.draw(ctx, OM.NET.on ? 'MENÚ' : 'PAUSA', CX, y + 10, { color: '8', size: 2, align: 'center', shadow: '0' });
     let yy = y + 38;
-    if (G.button(x + 20, yy, w - 40, 18, 'CONTINUAR', 'green', false, 'Escape')) onClose(); yy += 24;
+    // CONTINUAR sin tecla: Escape ya lo alterna cada escena (si no, se abría y cerraba en el mismo fotograma)
+    if (G.button(x + 20, yy, w - 40, 18, 'CONTINUAR', 'green')) onClose(); yy += 24;
     if (G.button(x + 20, yy, w - 40, 18, 'CRT: ' + (OM.META.crt ? 'SÍ' : 'NO'), 'dark')) { OM.META.crt = !OM.META.crt; OM.saveMeta(); } yy += 24;
     { const v = G.slider('mus_pause', x + 20, yy, w - 40, 18, 'MÚSICA', OM.META.musicVol); if (v !== OM.META.musicVol) { OM.setMusicVol(v); OM.saveMeta(); } } yy += 24;
     if (G.button(x + 20, yy, w - 40, 18, 'SONIDO: ' + (OM.META.sfx ? 'SÍ' : 'NO'), 'dark')) { OM.META.sfx = !OM.META.sfx; OM.saveMeta(); } yy += 24;
