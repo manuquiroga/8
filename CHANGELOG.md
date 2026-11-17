@@ -27,6 +27,7 @@ Cambios del juego pensados para jugadores. Los detalles técnicos y los números
 - Pasan a **hechizo**: Imán Oxidado, Boca Chica, Ojo de Cuervo, Blanca Fantasma, Segunda Oportunidad, Mano Negra, Seguro de Vida, Árbitro Comprado, Mal de Ojo, Tembleque y El Barquero.
 - Pasan a **activo** (un solo uso): La Mano, Dinamita y Terremoto.
 - **Terremoto** rehecho y bajado a raro: tus bolas que caen con el temblor valen +150 cada una y las del rival vuelven a la mesa (antes no puntuaba nada y era épico).
+- **Trucos de Feria**: solo cuenta el **salto** por encima de una bola (el massé salía casi en cualquier tiro con efecto) y pasa de x3 a **x2 Combo**.
 - **Bola de Oro** da además +$2. **Espejo Roto** solo copia comodines.
 - **Taco Espectral**: la blanca no puede caer (antes daba la Blanca Fantasma como comodín), -15% de potencia.
 - **Taco de la Usura**: +$2 al cobrar y +200 por ganar una partida.

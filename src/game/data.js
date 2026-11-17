@@ -172,8 +172,8 @@ OM.JOKERS = [
     state: () => ({ v: 0 }),
     onRivalBall() { this.st.v = Math.min(6, this.st.v + 0.5); },
     onShot(S) { if (this.st.v) { S.add({ mult: this.st.v }, this); this.st.v = 0; } } },
-  { id: 'trucos', art: 'astrologo', name: 'Trucos de Feria', rarity: 'raro', desc: 'Embocar SALTANDO por encima de una bola, o con MASSÉ: x3 Combo.',
-    onShot(S) { if (S.cur.hopped || S.cur.curved) S.add({ xmult: 3 }, this); } },
+  { id: 'trucos', art: 'astrologo', name: 'Trucos de Feria', rarity: 'raro', desc: 'Embocar SALTANDO por encima de una bola: x2 Combo.',
+    onShot(S) { if (S.cur.hopped) S.add({ xmult: 2 }, this); } }, // el massé salía en casi cualquier tiro con efecto: solo salto
   { id: 'bola_oro', art: 'calavera_dorada', name: 'Bola de Oro', rarity: 'raro', desc: 'En cada partida una bola al azar es de ORO. Si la embocas tú: +500 Puntos y +$2.', gold: true,
     onPot(S, b) { if (S.M.gold && S.M.gold[b.num] === S.me) S.add({ pts: 500, cash: 2 }, this); } },
   // nuevos (3.1)
