@@ -8,15 +8,15 @@
 1. **1 contra 1 de verdad.** Contra un bot (fácil, medio, difícil), dos jugadores en el mismo dispositivo u online por sala.
 2. **Los tiros vistosos pagan.** Dobles, triples, bandas, combinaciones, tacadas, saltos y massés multiplican los puntos. Meter una bola sin más vale poco.
 3. **Trastadas.** Los comodines no solo suman: roban puntos, encogen las troneras del rival, le hacen temblar el taco o sacuden la mesa.
-4. **Siempre hay partido.** El que va por detrás elige entre más comodines, saca la siguiente partida y las últimas partidas valen más.
+4. **Siempre hay partido.** El que va por detrás cobra más, ve más cartas en la tienda, saca la siguiente partida y las últimas partidas valen más.
 
 ## 2. Estructura
 ```
-Preparación (modo, tacos) -> [ Draft de comodín -> Partida ] x5 -> Resultado de la serie
+Preparación (modo, tacos) -> [ Tienda -> Partida ] x5 -> Resultado de la serie
 ```
 - **Serie de 5 partidas.** Gana quien tenga **más puntos** al final (desempate: partidas ganadas).
 - Ganar una partida da 1.000 / 1.250 / 1.500 / 2.000 / 3.000 puntos. Además, 100 por cada bola que le quede al rival.
-- **Draft**: antes de cada partida cada jugador elige 1 comodín de 3 (4 si va por detrás). Se queda toda la serie.
+- **Tienda**: antes de cada partida cada jugador compra con dinero ($). Ver sección 6.
 - **Obstáculos** (los antiguos jefes): la partida 3 y la 4 traen uno, la final trae dos.
 - **Modos**: Bola 8 (principal), Bola 9, o Mixta (1, 3 y 5 a bola 8; 2 y 4 a bola 9).
 
@@ -52,10 +52,24 @@ Además del efecto (punto de impacto en la blanca) se puede **elevar el taco** (
 
 La guía simula la blanca con los mandos actuales, así que la curva y el arco del salto se ven antes de tirar. **El efecto y la elevación se reinician después de cada tiro.**
 
-## 6. Contenido
-- **52 comodines**: de puntos (Bandolero, Doble o Nada, Trucos de Feria...), de mesa (Imán, Blanca Fantasma, El Barquero...), trastadas contra el rival (Tembleque, Mal de Ojo, Boca Chica, Ladrón, Peaje...) y activos de un uso por partida (La Mano, Terremoto, Dinamita).
-- **8 tacos** con estilo propio (potencia, guía, trucos, puntos de victoria...).
-- **12 obstáculos**: troneras selladas, péndulo, ciénaga, escarcha, niebla, sin guía, troneras pequeñas, pilares tipo pinball, vórtice, portales, reloj de 15 s y verdugo.
+## 6. Comodines, dinero y tienda
+**Tres tipos de carta** (campo `type` en `OM.JOKERS`):
+| Tipo | Qué hace | Límite | Duración |
+|---|---|---|---|
+| Comodín | Da puntos o dinero | 4 huecos | Toda la serie (se puede vender o reemplazar) |
+| Hechizo | Cambia cómo se juega: guía, troneras, temblor, reloj, fricción, inclinación... para ti o contra el rival | 1 | Una partida |
+| Activo | Efecto de un uso en tu turno (clic + USAR) | 1 | Hasta que lo usas |
+
+**Tienda** (una por jugador, sale de la semilla): 3 comodines + 1 hechizo + 1 activo. Cambiar cartas: $1, $2, $3... Vender: la mitad del precio. Comprar con la fila llena: eliges qué comodín sale (y te devuelven su mitad). Precios en `OM.SHOP.price`.
+
+**Dinero**:
+- $10 al empezar; sueldo de $4 tras cada partida.
+- Trucos en un tiro legal que emboca: doble $1, triple $2, 4+ $3, salto/massé $1, de rebote $1, tacada (3º tiro seguido) $1. **Tope $6 por partida.**
+- Algunos comodines dan dinero (Hucha, Tahúr, Cobrador, Prestamista, Rey Midas...).
+
+**Anti bola de nieve**: perder la partida +$2; ir por detrás en la serie +$2, una carta más y primer cambio gratis; sin intereses de base; hechizos y activos son consumibles. Medido con `node tools/simtest.js`: entre bots iguales, el que iba detrás tras la partida 3 gana ~40% de las series (con el draft era ~20%).
+
+**Contenido**: 53 comodines, 19 hechizos, 9 activos. 8 tacos. 12 obstáculos (troneras selladas, péndulo, ciénaga, escarcha, niebla, sin guía, troneras pequeñas, pilares, vórtice, portales, reloj de 15 s y verdugo).
 
 ## 7. Controles
 - Ratón/táctil: apunta, arrastra hacia atrás para cargar, suelta para tirar.

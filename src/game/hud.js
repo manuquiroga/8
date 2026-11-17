@@ -1,5 +1,5 @@
-// 8 — HUD del 1v1: panel izquierdo (marcador de los dos jugadores, tiro actual), fila de comodines
-// del que tira (arriba) y comodines del rival en pequeño (arriba a la derecha).
+// 8 — HUD del 1v1: panel izquierdo (marcador de los dos jugadores, dinero, tiro actual), fila de comodines
+// del que tira (arriba: 4 huecos de comodín + hechizo + activo) y comodines del rival en pequeño (arriba a la derecha).
 window.OM = window.OM || {};
 
 OM.HUD = (function () {
@@ -7,10 +7,17 @@ OM.HUD = (function () {
   const PCOL = ['q', 'v']; // color de cada jugador
   const H = { PCOL, sel: null, jiggle: {} };
 
-  function jokerX(n, i) {
-    const sp = n > 1 ? Math.min(46, (L.jokers.w - L.cardW) / (n - 1)) : 0;
-    return Math.round(L.jokers.x + i * sp);
+  // huecos fijos: 0-3 comodines, 4 hechizo, 5 activo
+  const NS = () => OM.SHOP.slots;
+  const slotX = (k) => L.jokers.x + (k < NS() ? k * 44 : NS() * 44 + 8 + (k - NS()) * 46);
+  const SLOT_TYPES = () => Array.from({ length: NS() }, () => 'comodin').concat(['hechizo', 'activo']);
+  // hueco de cada carta del jugador (en el orden de P.jokers)
+  function slotsOf(P) {
+    let c = 0;
+    return P.jokers.map((J) => { const t = OM.Match.typeOf(J.id); return t === 'hechizo' ? NS() : t === 'activo' ? NS() + 1 : Math.min(NS() - 1, c++); });
   }
+  H.slotsOf = slotsOf;
+  H.slotX = slotX;
   const miniX = (i) => L.consum.x + 4 + i * 21;
   H.bump = (uid) => { H.jiggle[uid] = 0.35; };
 
@@ -24,6 +31,7 @@ OM.HUD = (function () {
   H.jokerDesc = jokerDesc;
   H.defDesc = (def) => OM.colorize(def.desc.replace(/ \((Actual|Llevas|Cargado)[^)]*\)/, ''));
   const spent = (J) => { const d = OM.jokerDef(J.id); return J.used && (d.active || d.once); };
+  H.typeLabel = (def) => OM.RARITY[def.rarity].name + ' · ' + OM.JTYPE[OM.jtype(def)].name;
 
   // posición en pantalla de un comodín (para los textos flotantes). main = jugador de la fila grande.
   H.jokerPos = function (S, uid, main) {
@@ -31,48 +39,63 @@ OM.HUD = (function () {
       const i = S.players[pi].jokers.findIndex((J) => J.uid === uid);
       if (i < 0) continue;
       H.bump(uid);
-      if (pi === main) return { x: jokerX(S.players[pi].jokers.length, i) + 20, y: L.jokers.y + 66 };
+      if (pi === main) return { x: slotX(slotsOf(S.players[pi])[i]) + 20, y: L.jokers.y + 66 };
       return { x: miniX(i) + 10, y: L.consum.y + 62 };
     }
     return null;
   };
 
   // ---------- fila de comodines del que tira ----------
-  // opts: {canUse(idx) -> bool, onUse(idx)}
+  // opts: {locked, canUse(idx) -> bool, onUse(idx), onClick(idx) (tienda), selUid, markUid}
   H.drawJokers = function (ctx, S, pi, t, opts) {
     opts = opts || {};
-    const IN = OM.IN, G = OM.G, P = S.players[pi];
-    const y0 = L.jokers.y + 2, n = P.jokers.length;
+    const G = OM.G, P = S.players[pi];
+    const y0 = L.jokers.y + 2, slots = slotsOf(P), types = SLOT_TYPES();
     // rótulo del dueño
     ctx.fillStyle = OM.PAL[PCOL[pi]]; ctx.fillRect(L.jokers.x, L.jokers.y + L.jokers.h + 1, L.jokers.w, 1);
-    if (!n) OM.FONT.draw(ctx, 'Comodines de ' + P.name + ': ninguno todavía', L.jokers.x + 6, y0 + 22, { color: '5' });
-    else if (n <= 5) OM.FONT.draw(ctx, P.name, L.jokers.x + L.jokers.w - 2, y0 + 44, { color: PCOL[pi], align: 'right', shadow: '0' });
+    // huecos vacíos
+    types.forEach((type, k) => {
+      if (slots.includes(k)) return;
+      const x = slotX(k), T = OM.JTYPE[type];
+      ctx.globalAlpha = 0.5; ctx.fillStyle = OM.PAL['1']; ctx.fillRect(x + 1, y0 + 1, L.cardW - 2, L.cardH - 2); ctx.globalAlpha = 1;
+      ctx.fillStyle = OM.PAL[type === 'comodin' ? '5' : T.color];
+      for (let d = 0; d < L.cardW; d += 3) { ctx.fillRect(x + d, y0, 1, 1); ctx.fillRect(x + d, y0 + L.cardH - 1, 1, 1); }
+      for (let d = 0; d < L.cardH; d += 3) { ctx.fillRect(x, y0 + d, 1, 1); ctx.fillRect(x + L.cardW - 1, y0 + d, 1, 1); }
+      OM.FONT.draw(ctx, type === 'comodin' ? '+' : T.short.slice(0, 4), x + L.cardW / 2, y0 + 23, { color: type === 'comodin' ? '6' : T.color, align: 'center' });
+      if (G.inside(x, y0, L.cardW, L.cardH) && !opts.locked) G.tooltip(x + L.cardW / 2, y0 + L.cardH + 20, 'Hueco libre: ' + T.name.toLowerCase(), T.desc, T.color);
+    });
     let hover = -1;
     P.jokers.forEach((J, i) => {
-      const x = jokerX(n, i), y = y0;
+      const x = slotX(slots[i]), y = y0;
       const hov = G.inside(x, y, L.cardW, L.cardH) && !opts.locked;
       if (hov) hover = i;
-      const sel = H.sel === J.uid;
+      const sel = H.sel === J.uid || opts.selUid === J.uid;
       const jig = H.jiggle[J.uid] || 0;
       if (jig > 0) H.jiggle[J.uid] = jig - 1 / 60;
-      const def = OM.jokerDef(J.id);
+      const def = OM.jokerDef(J.id), type = OM.jtype(def);
       OM.CARDS.drawJoker(ctx, def, x, y - (sel ? 5 : 0), { t, hover: hov, selected: sel, scale: 1 + Math.max(0, jig) * 0.6, wobble: true, seed: i, alpha: spent(J) ? 0.35 : 1 });
-      if (def.active && !J.used) {
-        // los activos sin gastar laten
-        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 5); ctx.fillStyle = OM.PAL.u; ctx.fillRect(x + 16, y + L.cardH + 1, 8, 2); ctx.globalAlpha = 1;
+      if (type === 'activo') {
+        // los activos laten
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 5); ctx.fillStyle = OM.PAL.v; ctx.fillRect(x + 12, y + L.cardH + 1, 16, 2); ctx.globalAlpha = 1;
+      } else if (type === 'hechizo') { ctx.fillStyle = OM.PAL.u; ctx.fillRect(x + 12, y + L.cardH + 1, 16, 1); }
+      if (opts.markUid === J.uid) {
+        ctx.globalAlpha = 0.55 + 0.3 * Math.sin(t * 8); ctx.strokeStyle = OM.PAL.c; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 6, L.cardW + 2, L.cardH + 2); ctx.globalAlpha = 1;
       }
-      if (hov && def.active && G.clicked(x, y, L.cardW, L.cardH)) { H.sel = sel ? null : J.uid; OM.sfx('card_flip'); }
+      if (hov && G.clicked(x, y, L.cardW, L.cardH)) {
+        if (opts.onClick) opts.onClick(i, J);
+        else if (def.active) { H.sel = sel ? null : J.uid; OM.sfx('card_flip'); }
+      }
     });
     if (hover >= 0) {
       const J = P.jokers[hover], def = OM.jokerDef(J.id), r = OM.RARITY[def.rarity];
       G.cursor = 'grab';
-      G.tooltip(jokerX(n, hover) + L.cardW / 2, y0 + L.cardH + 20, def.name, jokerDesc(J), r.color, r.name + (spent(J) ? ' · GASTADO' : ''));
+      G.tooltip(slotX(slots[hover]) + L.cardW / 2, y0 + L.cardH + 20, def.name, jokerDesc(J), r.color, H.typeLabel(def) + (spent(J) ? ' · GASTADO' : ''));
     }
     const si = P.jokers.findIndex((J) => J.uid === H.sel);
-    if (si >= 0) {
+    if (si >= 0 && !opts.onClick) {
       const can = opts.canUse && opts.canUse(si);
-      if (G.button(jokerX(n, si) - 3, y0 + L.cardH - 1, 46, 14, P.jokers[si].used ? 'GASTADO' : 'USAR', 'green', !can)) { H.sel = null; opts.onUse && opts.onUse(si); }
-    } else H.sel = null;
+      if (G.button(slotX(slots[si]) - 3, y0 + L.cardH - 1, 46, 14, 'USAR', 'green', !can)) { H.sel = null; opts.onUse && opts.onUse(si); }
+    } else if (!opts.onClick) H.sel = null;
   };
 
   // ---------- comodines del rival (en pequeño) ----------
@@ -81,13 +104,14 @@ OM.HUD = (function () {
     OM.FONT.draw(ctx, P.name, L.consum.x + 4, L.consum.y + 2, { color: PCOL[pi], shadow: '0' });
     ctx.fillStyle = OM.PAL[PCOL[pi]]; ctx.fillRect(L.consum.x, L.consum.y + L.consum.h + 1, L.consum.w, 1);
     const y = L.consum.y + 16;
+    OM.FONT.draw(ctx, '$' + P.money, L.consum.x + L.consum.w - 2, L.consum.y + 2, { color: 'h', align: 'right', shadow: '0' });
     P.jokers.forEach((J, i) => {
       const x = miniX(i), def = OM.jokerDef(J.id);
       const jig = H.jiggle[J.uid] || 0;
       if (jig > 0) H.jiggle[J.uid] = jig - 1 / 60;
       const hov = G.inside(x, y, 20, 27);
       OM.CARDS.drawJoker(ctx, def, x - (jig > 0 ? 3 : 0), y - (jig > 0 ? 4 : 0), { t, scale: jig > 0 ? 0.8 : 0.5, alpha: spent(J) ? 0.35 : 1, hover: hov });
-      if (hov) { const r = OM.RARITY[def.rarity]; G.tooltip(x + 10, y + 34, def.name, jokerDesc(J), r.color, r.name + ' · de ' + P.name); }
+      if (hov) { const r = OM.RARITY[def.rarity]; G.tooltip(x + 10, y + 34, def.name, jokerDesc(J), r.color, H.typeLabel(def) + ' · de ' + P.name); }
     });
   };
 
@@ -121,7 +145,8 @@ OM.HUD = (function () {
       }
       const shown = info.shown ? info.shown[pi] : Pl.points;
       OM.FONT.draw(ctx, OM.fmt(shown), P.x + P.w - 12, y + 20, { color: '8', size: 2, align: 'right', shadow: '0' });
-      OM.FONT.draw(ctx, 'PTS', P.x + 10, y + 26, { color: '6' });
+      OM.FONT.draw(ctx, 'PTS', P.x + 10, y + 22, { color: '6' });
+      OM.FONT.draw(ctx, '$' + Pl.money, P.x + 10, y + 32, { color: 'h', shadow: '0' });
       // bolas que le quedan
       if (M && info.W) {
         if (M.mode === '8') {

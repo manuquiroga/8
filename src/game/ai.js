@@ -121,12 +121,13 @@ OM.AI = (function () {
     }
     const act = (kind) => P.jokers.findIndex((J, i) => OM.jokerDef(J.id).active === kind && OM.Match.canUse(S, me, i));
     const cands = candidates(S, W, cue.x, cue.y, cue);
-    if (!cands.length) {
-      const h = act('hand'); if (h >= 0) return { joker: h };
-      const q = act('quake'); if (q >= 0 && level !== 'facil') return { joker: q };
-    } else {
-      const b = act('bomb'); if (b >= 0 && Math.random() < 0.35) return { joker: b };
-    }
+    const Rv = S.players[1 - me], onFinal = M.mode === '8' && !M.open && !OM.Match.remaining(S, W, me).length;
+    const use = (kind, p) => { const i = act(kind); return i >= 0 && Math.random() < p ? { joker: i } : null; };
+    const pick = use('heist', Rv.points >= 1500 ? 1 : 0)                       // Atraco: cuando el rival tiene mucho
+      || use('hex', 0.25)
+      || (!cands.length ? use('hand', 1) || use('quake', level === 'facil' ? 0 : 1) || use('free', 1) || use('rewind', 1)
+        : use('bomb', 0.3) || use('xshot', 0.35) || use('boost', 0.3) || use('free', 0.2) || use('rewind', onFinal ? 1 : 0.15));
+    if (pick) return pick;
     if (cands.length) {
       let budget = lv.sims;
       if (budget > 0) {
@@ -165,13 +166,31 @@ OM.AI = (function () {
     return shot(t ? Math.atan2(t.y - cue.y, t.x - cue.x) : Math.random() * 6.28, 0.5);
   }
 
-  // elige comodín en el draft: prefiere rareza, con algo de azar
-  function draft(offers) {
-    const w = { comun: 1, raro: 2.2, epico: 4, legendario: 7 };
-    let best = offers[0], bs = -1;
-    offers.forEach((id) => { const s = w[OM.jokerDef(id).rarity] * (0.6 + Math.random() * 0.8); if (s > bs) { bs = s; best = id; } });
-    return best;
+  // compra en la tienda: llena huecos de comodines, cambia el peor por uno de más rareza, y gasta lo que sobra
+  // en hechizo y activo. Sin trampas: usa las mismas funciones que el jugador (OM.Match.buy / sell / reroll).
+  const RW = { comun: 1, raro: 2.2, epico: 4, legendario: 7 };
+  function shop(S, pi) {
+    const MT = OM.Match, P = S.players[pi], sh = MT.openShop(S);
+    const val = (id) => RW[OM.jokerDef(id).rarity] * (0.7 + Math.random() * 0.6);
+    for (let pass = 0; pass < 2; pass++) {
+      // comodines: de más valioso a menos
+      const offers = sh.offers[pi].map((o, k) => ({ o, k, v: val(o.id) })).filter((x) => !x.o.sold && MT.typeOf(x.o.id) === 'comodin').sort((a, b) => b.v - a.v);
+      for (const x of offers) {
+        if (MT.countType(P, 'comodin') < OM.SHOP.slots) { MT.buy(S, pi, x.k); continue; }
+        const worst = P.jokers.filter((J) => MT.typeOf(J.id) === 'comodin').sort((a, b) => RW[OM.jokerDef(a.id).rarity] - RW[OM.jokerDef(b.id).rarity])[0];
+        if (worst && RW[OM.jokerDef(worst.id).rarity] * 1.5 < x.v) MT.buy(S, pi, x.k, worst.uid);
+      }
+      // hechizo (dura una partida) y activo, si sobra
+      sh.offers[pi].forEach((o, k) => {
+        if (o.sold) return;
+        const t = MT.typeOf(o.id);
+        if (t === 'hechizo' && P.money >= MT.price(o.id) + 1) MT.buy(S, pi, k);
+        if (t === 'activo' && !MT.countType(P, 'activo') && P.money >= MT.price(o.id)) MT.buy(S, pi, k);
+      });
+      // cambia la tienda una vez si sobra mucho dinero
+      if (pass === 0 && P.money >= MT.rerollCost(S, pi) + 8) MT.reroll(S, pi); else break;
+    }
   }
 
-  return { plan, place, draft, candidates };
+  return { plan, place, shop, candidates };
 })();

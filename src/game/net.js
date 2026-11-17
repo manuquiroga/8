@@ -8,13 +8,13 @@
 window.OM = window.OM || {};
 
 OM.NET = (function () {
-  const PREFIX = 'ocho-pool-v3-';
+  const PREFIX = 'ocho-pool-v31-'; // cambia con cada versión incompatible del protocolo
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const TIMEOUT = 20; // s sin noticias del rival = desconectado
   const N = {
     on: false, role: null, code: null, peer: false, error: null,
     inbox: [],          // mensajes de partida (los consume la escena de mesa, en orden)
-    picks: {},          // 'partida:jugador' -> id de comodín elegido por el rival
+    shops: {},          // 'partida:jugador' -> estado del rival al salir de la tienda {jokers, money, uidN, stats}
     lobby: {},          // último `hello` del rival {name, cue, ready}
     cfg: null,          // config que manda el anfitrión {mode}
     start: null,        // orden de empezar del anfitrión
@@ -31,14 +31,14 @@ OM.NET = (function () {
     return m ? m[1].toUpperCase() : null;
   };
 
-  function reset() { N.inbox = []; N.picks = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
+  function reset() { N.inbox = []; N.shops = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
   function handle(m) {
     lastSeen = Date.now();
     if (!m || !m.t || m.t === 'ping') return;
     if (m.t === 'hello') { N.lobby = m; return; }
     if (m.t === 'cfg') { N.cfg = m; return; }
     if (m.t === 'start') { N.start = m; return; }
-    if (m.t === 'pick') { N.picks[m.match + ':' + m.pi] = m.id; return; }
+    if (m.t === 'shop') { N.shops[m.match + ':' + m.pi] = m.st; return; }
     N.inbox.push(m);
   }
   function lost(why) {

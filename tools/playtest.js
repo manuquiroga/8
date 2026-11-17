@@ -1,5 +1,5 @@
 // Playtest automatizado: node tools/playtest.js [outdir] [partidas=1]
-// Recorre título → preparación → draft → mesa (el jugador humano tira al azar contra el bot) y captura cada escena.
+// Recorre título → preparación → tienda → mesa (el jugador humano tira al azar contra el bot) y captura cada escena.
 // Necesita playwright (PLAYWRIGHT=/ruta/a/node_modules/playwright si no está instalado aquí).
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const path = require('path');
@@ -16,10 +16,13 @@ const path = require('path');
   const st = () => page.evaluate(() => ({ scene: OM.sceneName, phase: OM.dbg() && OM.dbg().phase, turn: OM.S && OM.S.M ? OM.S.M.turn : -1, err: OM.lastError || null }));
   await page.waitForTimeout(1500); await shot('01_title');
   await page.keyboard.press('Enter'); await page.waitForTimeout(900); await shot('02_setup');
-  await page.keyboard.press('Enter'); await page.waitForTimeout(1600); await shot('03_draft');
-  if (process.env.START) { await page.evaluate((i) => { OM.S.matchIdx = i; OM.go('draft'); }, +process.env.START); await page.waitForTimeout(1500); }
+  await page.keyboard.press('Enter'); await page.waitForTimeout(1600); await shot('03_shop');
+  if (process.env.START) { await page.evaluate((i) => { OM.S.matchIdx = i; OM.go('shop'); }, +process.env.START); await page.waitForTimeout(1500); }
   for (let m = 0; m < matches; m++) {
-    await page.keyboard.press('Digit1'); await page.waitForTimeout(3200); await shot(`m${m}_04_intro`);
+    // tienda: elige la primera carta, la compra (B) y sale (Enter)
+    await page.waitForTimeout(700); await page.keyboard.press('Digit1'); await page.waitForTimeout(300); await shot(`m${m}_03a_shop_sel`);
+    await page.keyboard.press('KeyB'); await page.waitForTimeout(400); await shot(`m${m}_03b_shop_buy`);
+    await page.keyboard.press('Enter'); await page.waitForTimeout(3200); await shot(`m${m}_04_intro`);
     await page.keyboard.press('Enter'); await page.waitForTimeout(600);
     let shots = 0, shotAim = false;
     for (let k = 0; k < 2400; k++) {
@@ -53,7 +56,7 @@ const path = require('path');
     }
     const s = await st();
     console.log('partida', m + 1, 'tiros del jugador', shots, '→ escena', s.scene, await page.evaluate(() => OM.S.players.map((p) => p.name + ' ' + p.points + 'pts ' + p.wins + 'w').join(' | ')));
-    if (s.scene === 'draft') { await page.waitForTimeout(800); await shot(`m${m}_10_draft`); }
+    if (s.scene === 'shop') { await page.waitForTimeout(800); await shot(`m${m}_10_shop`); }
     if (s.scene === 'final') { await page.waitForTimeout(800); await shot('11_final'); break; }
   }
   console.log(errs.length ? errs.join('\n') : 'sin errores');

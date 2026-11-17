@@ -148,13 +148,26 @@ OM.SCENES = OM.SCENES || {};
   }
   function actJoker(idx) {
     const S = S_(), me = S.M.turn, J = S.players[me].jokers[idx];
-    const kind = MT.useActive(S, me, idx);
-    if (!kind) return;
-    OM.HUD.bump(J.uid); OM.sfx('pack_open');
-    OM.FX.popText(MID.x, MID.y - 30, OM.jokerDef(J.id).name.toUpperCase() + '!', 'u', { size: 2 });
+    const pos = J && OM.HUD.jokerPos(S, J.uid, T.turnShown);
+    const r = MT.useActive(S, me, idx);
+    if (!r) return;
+    const kind = r.kind;
+    OM.sfx('pack_open');
+    if (pos) OM.FX.burst(pos.x, pos.y - 30, 'gold', 16);
+    OM.FX.popText(MID.x, MID.y - 30, r.name.toUpperCase() + '!', 'u', { size: 2 });
+    const say = (txt, col) => OM.FX.popText(MID.x, MID.y - 8, txt, col || 'v');
     if (kind === 'hand') { T.phase = 'place'; }
-    else if (kind === 'bomb') { OM.FX.popText(MID.x, MID.y - 8, 'PRÓXIMO TIRO: EXPLOSIVO', 'v'); }
-    else if (kind === 'quake') {
+    else if (kind === 'bomb') say('PRÓXIMO TIRO: EXPLOSIVO');
+    else if (kind === 'free') say('SI FALLAS, SIGUES TIRANDO');
+    else if (kind === 'xshot') say('PRÓXIMO TIRO QUE EMBOQUE: x3 COMBO', 'c');
+    else if (kind === 'rewind') say('SI EL TIRO SALE MAL, SE DESHACE', 'u');
+    else if (kind === 'hex') { say('EL PRÓXIMO TIRO DEL RIVAL: TEMBLOR Y SIN GUÍA', 'c'); OM.FX.flash('a', 0.2, 0.3); OM.sfx('curse'); }
+    else if (kind === 'boost') { T.mods = MT.applyTurn(S, T.W); T.guideKey = ''; say('¡TRONERAS GIGANTES!', 'm'); OM.FX.flash('m', 0.15, 0.25); }
+    else if (kind === 'heist') {
+      const b = boxPos(1 - me), a = boxPos(me);
+      OM.FX.popText(b.x, b.y, '-' + OM.fmt(r.v), 'c', { size: 2 }); OM.FX.popText(a.x, a.y, '+' + OM.fmt(r.v), PCOL[me], { size: 2 });
+      say('¡ROBA ' + OM.fmt(r.v) + ' PUNTOS!', 'h'); OM.sfx('coin'); OM.FX.shake(3, 0.25);
+    } else if (kind === 'quake') {
       PH.quake(T.W, 260);
       T.cur = MT.freeCur(); T.phase = 'quake';
       OM.FX.shake(6, 0.7); OM.FX.flash('v', 0.25, 0.3); OM.sfx('explosion');
@@ -280,7 +293,7 @@ OM.SCENES = OM.SCENES || {};
     if (kind === 'bot') return updateBot(dt);
     if (kind !== 'human') return;
     if (!T.charging) {
-      const overCtl = updateSpin() | updateElev();
+      const overCtl = T.mods.noSpin ? (T.spin.f = T.spin.s = T.elev = 0, false) : updateSpin() | updateElev();
       if (IN.kp.ArrowLeft || IN.kp.ArrowRight || IN.keys.ArrowLeft || IN.keys.ArrowRight) {
         const sp = IN.keys.ShiftLeft || IN.keys.ShiftRight ? 0.03 : 0.004;
         if (IN.keys.ArrowLeft) T.angle -= sp; if (IN.keys.ArrowRight) T.angle += sp;
@@ -332,14 +345,14 @@ OM.SCENES = OM.SCENES || {};
   // ---------------- reloj de tiro ----------------
   // Cada jugador tiene OM.POINTS.clock segundos por tiro (colocar + apuntar). Si se acaban es falta.
   // Con El Reloj son 15 s y el taco dispara solo. Solo lo hace cumplir el cliente del que tira.
-  const clockMax = () => (MT.hasObs(S_(), 'reloj') ? 15 : OM.POINTS.clock);
+  const clockMax = () => T.mods.clock || OM.POINTS.clock; // El Reloj y Prisa lo bajan a 15
   function tickClock(dt) {
     if (!idle() || ctl() === 'bot') return;
     const prev = T.clock; T.clock -= dt;
     if (Math.ceil(T.clock) !== Math.ceil(prev) && T.clock < 5 && T.clock > 0) OM.sfx('click', { pitch: 1.6 });
     if (T.clock > 0 || ctl() !== 'human') return;
     OM.FX.popText(MID.x, MID.y - 20, '¡TIEMPO!', 'c', { size: 2 });
-    if (MT.hasObs(S_(), 'reloj') || (T.charging && T.power >= 0.08)) {
+    if (MT.hasObs(S_(), 'reloj') || T.mods.clock < OM.POINTS.clock || (T.charging && T.power >= 0.08)) {
       if (T.phase === 'place') { const c = cueBall(); send({ t: 'place', x: c.x, y: c.y }); actPlace(c.x, c.y); }
       fire(T.charging && T.power >= 0.08 ? T.power : Math.max(0.35, T.power || 0.5));
     } else { send({ t: 'timeout' }); actTimeout(); }
@@ -451,7 +464,9 @@ OM.SCENES = OM.SCENES || {};
     const S = S_();
     T.shooter = S.M.turn;
     const q = MT.resolveQuake(S, T.W, T.cur);
-    q.back.forEach((n) => OM.FX.popText(MT.FOOT.x, MT.FOOT.y - 14, 'VUELVE LA ' + n, '7'));
+    q.back.forEach((n, i) => OM.FX.popText(MT.FOOT.x, MT.FOOT.y - 14 - i * 10, 'VUELVE LA ' + n, '7'));
+    q.own.forEach((p) => { OM.FX.popText(p.pocket.x, p.pocket.y - 10, '+' + q.each, PCOL[T.shooter]); OM.FX.burst(p.pocket.x, p.pocket.y, 'gold', 10); });
+    if (q.v) OM.sfx('chips');
     sendSync();
     T.after = () => { const b = T.bot; beginTurn(); if (b && T.bot) T.bot.t = 0.8; };
     settle();
@@ -488,6 +503,8 @@ OM.SCENES = OM.SCENES || {};
         case 'steal': { const b = boxPos(rv); OM.FX.popText(p.x, p.y - 8, 'ROBA ' + e.v, 'h'); OM.FX.popText(b.x, b.y, '-' + e.v, 'c'); OM.sfx('coin', { pitch }); break; }
         case 'rpts': { const b = boxPos(rv); if (e.src) OM.FX.popText(p.x, p.y, '+' + e.v, PCOL[rv]); OM.FX.popText(b.x, b.y, '+' + e.v, PCOL[rv], { size: 2 }); OM.sfx('coin'); break; }
         case 'pen': OM.FX.popText(MID.x, MID.y + 22, String(e.v), 'c', { size: 2 }); break;
+        case 'cash': OM.FX.popText(p.x, p.y + 10, (e.label ? e.label + ' ' : '') + '+$' + e.v, 'i', { size: e.label ? 2 : 1 }); OM.sfx('coin', { pitch: 1.3 }); break;
+        case 'rcash': { const b = boxPos(rv); OM.FX.popText(b.x, b.y + 12, '+$' + e.v, 'i'); OM.sfx('coin'); break; }
         case 'msg':
           OM.FX.popText(e.src ? p.x : MID.x, e.src ? p.y - 10 : MID.y, e.v, e.color || '8', { size: e.big || !e.src ? 2 : 1 });
           if (e.bad) { OM.sfx('lose', { vol: 0.5 }); OM.FX.flash('a', 0.3, 0.35); OM.FX.shake(3, 0.3); P.timer = 0.7; }
@@ -515,6 +532,7 @@ OM.SCENES = OM.SCENES || {};
   function afterShot() {
     const S = S_(), out = T.out;
     // las bolas que el juez devolvió a la mesa
+    if (out.rewound) { OM.FX.flash('u', 0.3, 0.4); OM.sfx('curse'); }
     out.respot.forEach((n) => { const b = T.W.balls.find((o) => o.num === n); if (b) { OM.FX.burst(b.x, b.y, 'smoke', 12); OM.FX.popText(b.x, b.y - 14, 'VUELVE LA ' + n, '7'); } });
     if (S.M.winner != null) { endMatch(); return; }
     if (out.foul && S.M.inHand === 'any') OM.FX.popText(MID.x, MID.y + 40, 'BOLA EN MANO PARA ' + S.players[S.M.turn].name.toUpperCase(), PCOL[S.M.turn], { size: 2 });
@@ -537,7 +555,7 @@ OM.SCENES = OM.SCENES || {};
     if (T.leaving) return;
     T.leaving = true;
     if (S.done) OM.go('final');
-    else OM.go('draft', { next: true });
+    else OM.go('shop', { next: true });
   }
 
   // ---------------- dibujo ----------------
@@ -664,7 +682,8 @@ OM.SCENES = OM.SCENES || {};
     if (T.phase !== 'end' && T.phase !== 'intro') {
       lines.push({ text: (idle() || T.phase === 'strike' ? 'TIRA ' : '') + P.name.toUpperCase() + (idle() ? ': ' + MT.goal(S, W) : ''), color: PCOL[me] });
       const st = M.streak[M.turn];
-      lines.push(st > 0 && idle() ? { text: 'TACADA x' + (st + 1) + ' · +' + Math.min(OM.POINTS.streakCap, st) + ' Combo', color: 'v' } : M.armed ? { text: 'DINAMITA ARMADA', color: 'v' } : null);
+      const fx = M.fx, arm = [fx.bomb && 'DINAMITA', fx.rewind && 'MARCHA ATRÁS', fx.free && 'TIRO GRATIS', fx.boost === M.turn && 'BOCA DEL INFIERNO', fx.xshot[M.turn] && 'GRAN GOLPE', fx.hex === M.turn && 'VUDÚ'].filter(Boolean);
+      lines.push(arm.length ? { text: arm.join(' + '), color: fx.hex === M.turn ? 'c' : 'v' } : st > 0 && idle() ? { text: 'TACADA x' + (st + 1) + ' · +' + Math.min(OM.POINTS.streakCap, st) + ' Combo', color: 'v' } : null);
       if (M.mode === '8') lines.push(M.inHand && idle() ? { text: 'BOLA EN MANO', color: 'm' } : null);
       if (online()) lines.push({ text: OM.NET.peer ? 'ONLINE · sala ' + OM.NET.code : 'RIVAL DESCONECTADO', color: OM.NET.peer ? '5' : 'c' });
       else if (ctl() === 'bot' && idle()) lines.push({ text: 'el bot está pensando...', color: '5' });
@@ -707,7 +726,8 @@ OM.SCENES = OM.SCENES || {};
       const s = Math.max(0, Math.ceil(T.clock));
       OM.FONT.draw(ctx, String(s), F.x + F.w / 2, F.y - 15, { color: s <= 5 ? 'c' : '8', size: 2, align: 'center', shadow: '0' });
     }
-    if (idle() || T.charging || T.phase === 'strike') drawControls(ctx, t);
+    if (T.mods.noSpin && (idle() || T.charging)) OM.FONT.draw(ctx, 'GRILLETES: sin efecto', L.bottom.x + L.bottom.w - 4, L.bottom.y + 16, { color: 'c', align: 'right' });
+    else if (idle() || T.charging || T.phase === 'strike') drawControls(ctx, t);
     // cartel de turno
     if (T.banner && T.phase !== 'end') {
       const a = Math.min(1, T.banner.t * 3);
@@ -785,7 +805,7 @@ OM.SCENES = OM.SCENES || {};
       'Gana la SERIE quien tenga más puntos tras las 5 partidas. Ganar una partida da un buen pellizco, y la final vale el triple.',
       ' ',
       '{u}MANDOS{/}: apunta con el ratón, arrastra hacia atrás para cargar y suelta. WASD (o la bola de abajo) = efecto. Q/E (o el taco de abajo) = ángulo de golpe: con efecto lateral hace {u}massé{/} (curva) y al centro y fuerte la blanca {u}salta{/}. El efecto y el ángulo se reinician en cada tiro.',
-      'Los comodines que laten son ACTIVOS: haz clic en la carta y pulsa USAR.',
+      '{h}TIENDA{/}: antes de cada partida compras con $. Hasta ' + OM.SHOP.slots + ' {q}comodines{/} (puntos y dinero, toda la serie), 1 {u}hechizo{/} (cambia la partida, dura una) y 1 {v}activo{/} (un uso: clic en la carta y USAR). Los trucos dan $.',
     ]);
     let yy = y + 32;
     txt.forEach((p) => { OM.FONT.wrap(p, w - 24, 1).forEach((ln) => { OM.FONT.draw(ctx, ln, x + 12, yy, { color: '7' }); yy += 11; }); yy += 2; });

@@ -13,6 +13,9 @@ window.OM = window.OM || {};
   OM.META = { series: 0, wins: 0, bestPts: 0, bestShot: 0, seen: {}, crt: true, music: true, sfx: true, name: 'Jugador', cue: 'peregrino', bot: 'medio', mode: '8' };
   try { Object.assign(OM.META, JSON.parse(localStorage.getItem('om_meta') || '{}')); } catch (e) {}
   if (!OM.META.seen || typeof OM.META.seen !== 'object') OM.META.seen = {};
+  // volumen de música 0..100 (antes era sí/no)
+  if (typeof OM.META.musicVol !== 'number') OM.META.musicVol = OM.META.music === false ? 0 : 60;
+  OM.META.musicVol = Math.max(0, Math.min(100, Math.round(OM.META.musicVol)));
   OM.saveMeta = () => { try { localStorage.setItem('om_meta', JSON.stringify(OM.META)); } catch (e) {} };
 
   // ---------- entrada ----------
@@ -66,6 +69,19 @@ window.OM = window.OM || {};
       if (hit) OM.sfx('click');
       return hit;
     },
+    // control deslizante 0..100: clic o arrastre. Devuelve el valor (nuevo si se tocó). id: para seguir el arrastre.
+    slider(id, x, y, w, h, label, value) {
+      const hov = G.inside(x, y, w, h);
+      if (hov && IN.pressed && !IN.consumed) { G.drag = id; IN.consumed = true; }
+      if (G.drag === id) { if (IN.down) value = Math.round(Math.max(0, Math.min(1, (IN.mx - x - 3) / (w - 6))) * 100); else { G.drag = null; OM.sfx('click'); } }
+      if (hov) { G.cursor = 'grab'; if (IN.wheel) { value = Math.max(0, Math.min(100, value - Math.sign(IN.wheel) * 5)); IN.wheel = 0; } }
+      OM.UI.panel(ctx, x, y, w, h, G.drag === id || hov ? 'gold' : 'inset');
+      const fw = Math.round((w - 6) * value / 100);
+      ctx.globalAlpha = 0.45; ctx.fillStyle = OM.PAL[value ? 'g' : '3']; ctx.fillRect(x + 3, y + 3, fw, h - 6); ctx.globalAlpha = 1;
+      { const hx = x + 3 + Math.max(0, fw - 1); ctx.fillStyle = OM.PAL.i; ctx.fillRect(hx, y + 1, 2, 3); ctx.fillRect(hx, y + h - 4, 2, 3); }
+      OM.FONT.draw(ctx, label + ' ' + value, x + w / 2, y + Math.round((h - 7) / 2), { color: '8', align: 'center', outline: '0' });
+      return value;
+    },
     tooltip(x, y, title, body, color, sub) { G.tip = { x, y, title, body, color, sub }; },
     drawTooltip() {
       const t = G.tip; if (!t) return;
@@ -87,9 +103,10 @@ window.OM = window.OM || {};
   // colorea descripciones: "+4 Mult" rojo, "Fichas" azul, "$" oro
   OM.colorize = (s) => s
     .replace(/((?:\+|x)\s?[\d.]+\s?Combo)/g, '{c}$1{/}')
-    .replace(/(x[\d.]+)(?! Combo)/g, '{c}$1{/}')
+    .replace(/\b(x\d[\d.]*)(?![\d.]| Combo)/g, '{c}$1{/}')
+    .replace(/(\+\$\d+)/g, '{i}$1{/}')
     .replace(/(\+\d+\s?Puntos)/g, '{q}$1{/}')
-    .replace(/\b(ACTIVO|LISA|LISAS|RAYADA|RAYADAS|ESQUINA|LATERALES|BANDA|COMBINACIÓN|TACADA|SALTO|SALTOS|MASSÉ|MASSÉS|ORO|RIVAL|ROBA|FALTA|FALLO|EFECTO)\b/g, '{h}$1{/}');
+    .replace(/\b(ACTIVO|LISA|LISAS|RAYADA|RAYADAS|ESQUINA|LATERALES|BANDA|COMBINACIÓN|TACADA|SALTO|SALTOS|MASSÉ|MASSÉS|ORO|RIVAL|ROBA|FALTA|FALLO|EFECTO|SAQUE|ÚLTIMA|PIERDAS|PERDIENDO)\b/g, '{h}$1{/}');
 
   OM.fmt = (n) => {
     n = Math.floor(n);
@@ -97,7 +114,17 @@ window.OM = window.OM || {};
     return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
   OM.sfx = (name, o) => { try { if (OM.META.sfx && OM.AUDIO) OM.AUDIO.sfx(name, o); } catch (e) {} };
-  OM.music = (name) => { try { if (OM.AUDIO) OM.AUDIO.music(OM.META.music ? name : null); } catch (e) {} OM._track = name; };
+  // aplica el volumen de música (0..100); a 0 la música se para
+  OM.setMusicVol = (v) => {
+    const prev = OM.META.musicVol;
+    OM.META.musicVol = Math.max(0, Math.min(100, Math.round(v)));
+    try { if (OM.AUDIO) OM.AUDIO.setVolume(null, OM.META.musicVol / 100, null); } catch (e) {}
+    if (!prev !== !OM.META.musicVol) OM.music(OM._track);
+  };
+  OM.music = (name) => {
+    try { if (OM.AUDIO) { OM.AUDIO.setVolume(null, OM.META.musicVol / 100, null); OM.AUDIO.music(OM.META.musicVol > 0 ? name : null); } } catch (e) {}
+    OM._track = name;
+  };
 
   // ---------- escenas ----------
   OM.scene = null;
@@ -160,7 +187,10 @@ window.OM = window.OM || {};
       ctx.fillStyle = '#fff'; ctx.font = '8px monospace'; ctx.fillText(String(err).slice(0, 120), 4, 9);
     }
     // global keys
-    if (IN.kp.KeyM && !OM.typing) { OM.META.music = !OM.META.music; OM.saveMeta(); OM.music(OM._track); }
+    if (IN.kp.KeyM && !OM.typing) { // M: silenciar / recuperar el volumen anterior
+      if (OM.META.musicVol > 0) { OM.META.lastMusicVol = OM.META.musicVol; OM.setMusicVol(0); } else OM.setMusicVol(OM.META.lastMusicVol || 60);
+      OM.saveMeta();
+    }
     sctx.setTransform(1, 0, 0, 1, 0, 0);
     OM.FX.post(buf.c, sctx, screen.width, screen.height, t, { crt: OM.META.crt });
     IN.pressed = IN.released = IN.rpressed = false; IN.wheel = 0; IN.kp = {}; IN.typed = '';

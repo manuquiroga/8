@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>8 — preview v1.3</title>
+<style>html, body { margin: 0; background: #07050d; overflow: hidden; } canvas { display: block; width: 640px; height: 360px; image-rendering: pixelated; }</style>
+</head>
+<body>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script>
+<script src="../src/game/data.js"></script>
+<script src="../src/art/cards_art.js"></script>
+<script src="../src/art/cards_art_v11.js"></script>
+<script src="../src/art/cards_art_v13.js"></script>
+<script src="../src/art/cards_art_v31.js"></script>
+<script>
+// Hoja de contacto del contenido v1.3: comodines, jefes y tacos nuevos a x3.
+(function () {
+  OM.ART_INIT.forEach((f) => f());
+  const ctx = document.getElementById('c').getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const P = OM.PAL;
+  ctx.fillStyle = P['1']; ctx.fillRect(0, 0, 640, 360);
+  const names = ['hucha','tahur','saltimbanqui','cobrador','pobre_diablo','rompedor','equilibrista','prestamista','avaro','vengador','ultimo_suspiro','la_banda','fenix','virtuoso','rey_midas','brazo_ogro','prisa','amuleto','escarcha_negra','grilletes','kamikaze','venda','mesa_torcida','tiro_gratis','boca_infierno','vudu','atraco','gran_golpe','marcha_atras'].map((n) => 'joker_' + n)
+    
+    ;
+  names.forEach((n, i) => {
+    const x = 6 + (i % 10) * 63, y = 4 + Math.floor(i / 10) * 118, s = 1.8;
+    const sp = OM.PX.get(n);
+    ctx.fillStyle = P['2']; ctx.fillRect(x - 1, y - 1, 82, 82);
+    if (sp) ctx.drawImage(sp.c, x, y, sp.w * s, sp.h * s); else { ctx.fillStyle = P.b; ctx.fillRect(x, y, 20, 20); }
+    ctx.fillStyle = P['6']; ctx.font = '8px monospace'; ctx.fillText(n, x, y + 92);
+  });
+})();
+</script>
+</body>
+</html>

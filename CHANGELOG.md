@@ -2,6 +2,38 @@
 
 Cambios del juego pensados para jugadores. Los detalles técnicos y los números del bot de balance están en [docs/DEVLOG.md](docs/DEVLOG.md).
 
+## 3.1 — Tienda y comodines nuevos · 2026-11-17 (sin publicar, en playtest)
+
+**Adiós al draft de "1 comodín por partida". Ahora hay dinero y tienda.**
+
+### Tres tipos de comodín
+- **Comodín** (puntos o dinero): te lo quedas toda la serie. **Máximo 4.** Si no hay hueco, eliges cuál sale (te devuelven la mitad).
+- **Hechizo**: cambia cómo se juega (guía, troneras, temblores, reloj, mesa...). **Solo uno a la vez y dura una partida.**
+- **Activo**: se usa una vez en tu turno (clic en la carta + USAR) y desaparece. **Solo uno a la vez**; si no lo usas, se guarda para la siguiente partida.
+
+### Tienda y dinero ($)
+- Antes de cada partida cada jugador tiene su tienda: 3 comodines, 1 hechizo y 1 activo. Puedes **cambiar las cartas** ($1, luego $2, $3...) y **vender** lo tuyo por la mitad.
+- Precios: comodín $4 / $6 / $8 / $11 según rareza; hechizo $3-$8; activo $2-$6.
+- **Se cobra**: $10 al empezar y un sueldo de $4 tras cada partida.
+- **Los trucos pagan**: doble +$1, triple +$2, masacre +$3, salto o massé +$1, de rebote +$1, tacada (3er tiro seguido embocando en adelante) +$1. **Tope: $6 por partida.**
+- **Contra la bola de nieve**: quien pierde la partida cobra +$2, quien va por detrás en la serie cobra +$2, ve **una carta más** y su primer cambio de tienda es **gratis**. No hay intereses (salvo con comodines que ocupan hueco). Los hechizos caducan y los activos se gastan, así que el dinero no se acumula. En 40 series bot contra bot del mismo nivel, quien iba por detrás tras la partida 3 ganó la serie el 42% de las veces (antes 22%); el bot difícil sigue ganando siempre al medio.
+
+### 29 cartas nuevas
+- **Comodines**: La Hucha (+$3 al cobrar), El Tahúr ($1 por doble), Saltimbanqui (salto o massé: +200 y +$1), El Cobrador (faltas del rival: +100 y +$1), Pobre Diablo (+$4 si vas perdiendo), Rompedor (bolas del saque a 150 y +$1), Equilibrista (embocar sin que la blanca toque banda), Prestamista (interés con tope), El Avaro (+Combo por el dinero guardado), El Vengador (x2 tras una falta del rival), Último Suspiro (tu última bola antes de la final), La Banda (+1 Combo por cada carta tuya), El Fénix (perder una partida da +700 y +$2), El Virtuoso (x1.5 por cada truco distinto del tiro), Rey Midas (+100 y +$1 por bola, máx. $5 por partida).
+- **Hechizos**: Brazo de Ogro, Prisa (el rival tiene 15 s), Amuleto (inmune a las trastadas del rival), Escarcha Negra (en el turno del rival el paño no frena), Grilletes (el rival sin efecto ni elevación), Kamikaze (la blanca dentro no es falta si embocas una tuya), La Venda (el rival sin guía), Mesa Torcida (la mesa se inclina en el turno del rival).
+- **Activos**: Tiro Gratis, Boca del Infierno (troneras +60% un tiro), Muñeco Vudú (el próximo tiro del rival tiembla y sin guía), Atraco (roba el 10% de sus puntos), Gran Golpe (x3 Combo), Marcha Atrás (si el tiro sale mal, se deshace y repites).
+
+### Cambios
+- Pasan a **hechizo**: Imán Oxidado, Boca Chica, Ojo de Cuervo, Blanca Fantasma, Segunda Oportunidad, Mano Negra, Seguro de Vida, Árbitro Comprado, Mal de Ojo, Tembleque y El Barquero.
+- Pasan a **activo** (un solo uso): La Mano, Dinamita y Terremoto.
+- **Terremoto** rehecho y bajado a raro: tus bolas que caen con el temblor valen +150 cada una y las del rival vuelven a la mesa (antes no puntuaba nada y era épico).
+- **Bola de Oro** da además +$2. **Espejo Roto** solo copia comodines.
+- **Taco Espectral**: la blanca no puede caer (antes daba la Blanca Fantasma como comodín), -15% de potencia.
+- **Taco de la Usura**: +$2 al cobrar y +200 por ganar una partida.
+- La colección se divide en pestañas: comodines, hechizos y activos.
+- **Volumen de música de 0 a 100** (título y pausa) en vez de sí/no. M silencia y recupera el volumen.
+- Online: el código de sala cambia de prefijo (las salas de 3.0 y 3.1 no se ven entre sí).
+
 ## 3.0 — Pool arcade 1v1 · 2026-11-16 (sin publicar, en playtest)
 
 ### Online sin servidor (3.0c)

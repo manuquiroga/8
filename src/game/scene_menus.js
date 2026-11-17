@@ -1,4 +1,4 @@
-// 8 — menús del 1v1: título, preparación (bot / 2 jugadores), sala online, draft de comodines,
+// 8 — menús del 1v1: título, preparación (bot / 2 jugadores), sala online, tienda de comodines,
 // resultado de la serie, colección y pausa.
 window.OM = window.OM || {};
 OM.SCENES = OM.SCENES || {};
@@ -19,7 +19,7 @@ OM.SCENES = OM.SCENES || {};
     let yy = y + 38;
     if (G.button(x + 20, yy, w - 40, 18, 'CONTINUAR', 'green', false, 'Escape')) onClose(); yy += 24;
     if (G.button(x + 20, yy, w - 40, 18, 'CRT: ' + (OM.META.crt ? 'SÍ' : 'NO'), 'dark')) { OM.META.crt = !OM.META.crt; OM.saveMeta(); } yy += 24;
-    if (G.button(x + 20, yy, w - 40, 18, 'MÚSICA: ' + (OM.META.music ? 'SÍ' : 'NO'), 'dark')) { OM.META.music = !OM.META.music; OM.saveMeta(); OM.music(OM._track); } yy += 24;
+    { const v = G.slider('mus_pause', x + 20, yy, w - 40, 18, 'MÚSICA', OM.META.musicVol); if (v !== OM.META.musicVol) { OM.setMusicVol(v); OM.saveMeta(); } } yy += 24;
     if (G.button(x + 20, yy, w - 40, 18, 'SONIDO: ' + (OM.META.sfx ? 'SÍ' : 'NO'), 'dark')) { OM.META.sfx = !OM.META.sfx; OM.saveMeta(); } yy += 24;
     if (G.button(x + 20, yy, w - 40, 18, 'ABANDONAR SERIE', 'red')) { onClose(); OM.NET.close(); OM.go('title'); }
   };
@@ -59,7 +59,7 @@ OM.SCENES = OM.SCENES || {};
     OM.S.cfg = cfg;
     OM.S.players.forEach((P) => P.jokers.forEach((J) => (OM.META.seen[J.id] = 1)));
     OM.META.series++; OM.saveMeta();
-    OM.go('draft');
+    OM.go('shop');
   }
 
   // ---------------- TÍTULO ----------------
@@ -79,7 +79,7 @@ OM.SCENES = OM.SCENES || {};
       if (G.button(bx, y, bw, 16, 'COLECCIÓN', 'dark')) OM.go('collection');
       y += 20;
       if (G.button(bx, y, 82, 16, 'CRT ' + (M.crt ? 'SÍ' : 'NO'), 'dark')) { M.crt = !M.crt; OM.saveMeta(); }
-      if (G.button(bx + 88, y, 82, 16, 'MÚSICA ' + (M.music ? 'SÍ' : 'NO'), 'dark')) { M.music = !M.music; OM.saveMeta(); OM.music('menu'); }
+      { const v = G.slider('mus_title', bx + 88, y, 82, 16, 'MÚSICA', M.musicVol); if (v !== M.musicVol) { OM.setMusicVol(v); OM.saveMeta(); } }
     },
   };
 
@@ -148,7 +148,7 @@ OM.SCENES = OM.SCENES || {};
         else players.push({ name: bot.botName, kind: 'bot', level: bot.id, cue: OM.CUES[Math.floor(Math.random() * OM.CUES.length)].id });
         startSeries({ mode: this.mode, players });
       }
-      OM.FONT.draw(ctx, '5 partidas · antes de cada una eliges un comodín · las partidas 3, 4 y 5 traen obstáculos', CX, 314, { color: '5', align: 'center' });
+      OM.FONT.draw(ctx, '5 partidas · antes de cada una pasas por la tienda · las partidas 3, 4 y 5 traen obstáculos', CX, 314, { color: '5', align: 'center' });
       if (G.button(12, 334, 70, 18, 'VOLVER', 'dark', false, field ? null : 'Escape')) { if (p === 1) { this.step = 0; this.st = { sel: this.cues[0], off: 0 }; } else OM.go('title'); }
     },
   };
@@ -257,21 +257,22 @@ OM.SCENES = OM.SCENES || {};
     },
   };
 
-  // ---------------- DRAFT: cada jugador elige 1 comodín antes de cada partida ----------------
-  OM.SCENES.draft = {
+  // ---------------- TIENDA: antes de cada partida cada jugador compra, vende y cambia ----------------
+  // Comodines (máx. OM.SHOP.slots, toda la serie), 1 hechizo (dura la partida) y 1 activo (un uso).
+  OM.SCENES.shop = {
     enter(arg) {
       const S = OM.S;
-      if (arg && arg.next) { S.matchIdx++; S.M = null; } // venimos de la mesa: pasa a la siguiente partida
-      this.offers = [MT.draftOffers(S, 0), MT.draftOffers(S, 1)];
-      this.picked = [undefined, undefined];
-      this.t0 = OM.time; this.doneT = null; this.paused = false; this.botT = 0.9; this.left = false; this.flipped = {};
+      if (arg && arg.next) { MT.payday(S); S.matchIdx++; S.M = null; } // venimos de la mesa: cobro y siguiente partida
+      MT.openShop(S);
+      this.done = [false, false]; this.sel = null; this.replaceUid = null; this.note = null;
+      this.t0 = OM.time; this.doneT = null; this.paused = false; this.botT = 0.9; this.left = false; this.flipped = {}; this.shopper = -1;
       OM.HUD.sel = null; OM.typing = false;
       OM.music('shop');
     },
-    choose(pi, id) {
+    finish(pi) {
       const S = OM.S;
-      this.picked[pi] = id;
-      if (OM.NET.on && S.players[pi].kind === 'human') OM.NET.send({ t: 'pick', match: S.matchIdx, pi, id });
+      this.done[pi] = true; this.sel = null; this.replaceUid = null; this.note = null; this.t0 = OM.time;
+      if (OM.NET.on && S.players[pi].kind === 'human') OM.NET.send({ t: 'shop', match: S.matchIdx, pi, st: MT.shopState(S, pi) });
       OM.sfx('buy'); OM.FX.flash(PCOL[pi], 0.2, 0.25);
     },
     update(dt) {
@@ -279,26 +280,36 @@ OM.SCENES = OM.SCENES || {};
       if (OM.IN.kp.Escape) this.paused = !this.paused;
       this.botT -= dt;
       S.players.forEach((P, pi) => {
-        if (this.picked[pi] !== undefined) return;
-        if (P.kind === 'bot' && this.botT <= 0) this.choose(pi, OM.AI.draft(this.offers[pi]));
-        if (P.kind === 'remote') { const id = OM.NET.picks[S.matchIdx + ':' + pi]; if (id !== undefined) { this.picked[pi] = id; OM.sfx('buy'); } }
+        if (this.done[pi]) return;
+        if (P.kind === 'bot' && this.botT <= 0) { OM.AI.shop(S, pi); this.finish(pi); }
+        if (P.kind === 'remote') { const st = OM.NET.shops[S.matchIdx + ':' + pi]; if (st) { MT.applyShopState(S, pi, st); this.done[pi] = true; OM.sfx('buy'); } }
       });
-      if (this.doneT == null && this.picked.every((p) => p !== undefined)) this.doneT = 1.6;
+      if (this.doneT == null && this.done.every(Boolean)) this.doneT = 1.2;
       if (this.doneT != null) {
         this.doneT -= dt;
         if (this.doneT <= 0 && !this.left) {
           this.left = true;
-          this.picked.forEach((id, pi) => { MT.pick(S, pi, id); OM.META.seen[id] = 1; });
+          S.players.forEach((P) => P.jokers.forEach((J) => (OM.META.seen[J.id] = 1)));
           OM.saveMeta();
           OM.go('table');
         }
       }
     },
+    // compra la oferta k (con reemplazo si hace falta)
+    buy(pi, k) {
+      const S = OM.S, r = MT.buy(S, pi, k, this.replaceUid);
+      if (r.err) { this.note = { text: r.err, color: 'c' }; OM.sfx('click', { pitch: 0.6 }); return; }
+      OM.META.seen[r.J.id] = 1;
+      this.note = { text: OM.jokerDef(r.J.id).name + (r.out ? ' reemplaza a ' + OM.jokerDef(r.out.id).name + ' (+$' + r.refund + ')' : ' comprado'), color: 'm' };
+      this.sel = { own: r.J.uid }; this.replaceUid = null;
+      OM.sfx('buy'); OM.HUD.bump(r.J.uid); OM.FX.burst(OM.HUD.slotX(OM.HUD.slotsOf(S.players[pi])[S.players[pi].jokers.indexOf(r.J)]) + 20, L.jokers.y + 30, 'gold', 14);
+    },
     draw(ctx, t) {
       const S = OM.S, G = OM.G;
       OM.UI.drawBackground(ctx, t, 'shop');
-      // quién elige ahora en este dispositivo
-      const cur = S.players.findIndex((P, pi) => P.kind === 'human' && this.picked[pi] === undefined);
+      // quién compra ahora en este dispositivo
+      const cur = S.players.findIndex((P, pi) => P.kind === 'human' && !this.done[pi]);
+      if (cur !== this.shopper) { this.shopper = cur; this.sel = null; this.replaceUid = null; this.note = null; this.t0 = OM.time; }
       const view = cur >= 0 ? cur : S.players[S.me] && S.players[S.me].kind === 'human' ? S.me : 0;
       const obs = S.obstacles[S.matchIdx] || [];
       const lines = [
@@ -308,41 +319,23 @@ OM.SCENES = OM.SCENES || {};
       ];
       const self = this;
       OM.HUD.drawPanel(ctx, S, t, { turn: view, lines, buttons(y) { if (G.button(L.panel.x + 8, y, 164, 16, 'MENÚ', 'dark')) self.paused = true; } });
-      OM.HUD.drawJokers(ctx, S, view, t, { locked: true });
+      const P = S.players[view];
+      const shopping = cur >= 0 && !this.paused;
+      // fila propia: clic = seleccionar (vender / elegir cuál reemplazar)
+      OM.HUD.drawJokers(ctx, S, view, t, {
+        locked: !shopping, selUid: this.sel && this.sel.own, markUid: this.replaceUid,
+        onClick: (i, J) => {
+          OM.sfx('card_flip');
+          const so = this.sel && this.sel.k != null ? this.selOffer(S, cur) : null;
+          // con una oferta de comodín seleccionada y sin hueco: el clic elige a quién reemplazar
+          if (so && MT.typeOf(so.id) === 'comodin' && MT.typeOf(J.id) === 'comodin' && MT.countType(P, 'comodin') >= OM.SHOP.slots) { this.replaceUid = this.replaceUid === J.uid ? null : J.uid; return; }
+          this.sel = { own: J.uid }; this.replaceUid = null;
+        },
+      });
       OM.HUD.drawRivalJokers(ctx, S, 1 - view, t);
       OM.UI.panel(ctx, AREA.x, AREA.y, AREA.w, AREA.h, 'dark');
-      const ax = AREA.x + AREA.w / 2;
-      if (cur >= 0) {
-        const P = S.players[cur], offers = this.offers[cur];
-        OM.FONT.draw(ctx, 'ELIGE UN COMODÍN', ax, AREA.y + 8, { color: 'h', size: 2, align: 'center', shadow: '0' });
-        OM.FONT.draw(ctx, P.name + (offers.length > 3 ? ' · vas por detrás: eliges entre ' + offers.length : ' · te lo quedas toda la serie'), ax, AREA.y + 30, { color: PCOL[cur], align: 'center', shadow: '0' });
-        const n = offers.length, sp = n > 3 ? 106 : 132, appearT = OM.time - this.t0;
-        offers.forEach((id, i) => {
-          const def = OM.jokerDef(id), rar = OM.RARITY[def.rarity];
-          const x = Math.round(ax + (i - (n - 1) / 2) * sp - 40), y = AREA.y + 50;
-          if (appearT < 0.25 + i * 0.15) { ctx.save(); ctx.translate(x, y); ctx.scale(2, 2); OM.CARDS.drawBack(ctx, 0, 0, 'joker', { t }); ctx.restore(); return; }
-          if (!this.flipped[cur + ':' + i]) { this.flipped[cur + ':' + i] = true; OM.sfx('card_flip', { pitch: 1 + i * 0.1 }); }
-          const hov = G.inside(x, y, 80, 108);
-          OM.CARDS.drawJoker(ctx, def, x, y - (hov ? 4 : 0), { t, hover: hov, wobble: true, seed: i, scale: 2 });
-          OM.FONT.draw(ctx, def.name, x + 40, y + 116, { color: '8', align: 'center', shadow: '0' });
-          OM.FONT.draw(ctx, rar.name + (def.active ? ' · ACTIVO' : def.rival ? ' · TRASTADA' : ''), x + 40, y + 128, { color: rar.color, align: 'center' });
-          OM.FONT.wrap(OM.HUD.defDesc(def), sp - 8).slice(0, 6).forEach((ln, j) => OM.FONT.draw(ctx, ln, x + 40 - (sp - 8) / 2, y + 142 + j * 10, { color: '7' }));
-          if (hov) G.cursor = 'grab';
-          if ((hov && G.clicked(x, y, 80, 108)) || G.button(x + 8, AREA.y + AREA.h - 24, 64, 18, 'ELEGIR', 'green', false, 'Digit' + (i + 1))) { this.choose(cur, id); this.t0 = OM.time; }
-        });
-      } else {
-        // todos eligieron (o falta el rival online / el bot)
-        OM.FONT.draw(ctx, this.doneT != null ? '¡A LA MESA!' : 'ESPERANDO AL RIVAL...', ax, AREA.y + 8, { color: 'h', size: 2, align: 'center', shadow: '0', wave: 1, t });
-        S.players.forEach((P, pi) => {
-          const id = this.picked[pi], x = ax + (pi ? 40 : -120), y = AREA.y + 60;
-          OM.FONT.draw(ctx, P.name, x + 40, y - 16, { color: PCOL[pi], align: 'center', shadow: '0' });
-          if (id === undefined) { ctx.save(); ctx.translate(x, y); ctx.scale(2, 2); OM.CARDS.drawBack(ctx, 0, 0, 'joker', { t }); ctx.restore(); OM.FONT.draw(ctx, 'eligiendo...', x + 40, y + 118, { color: '5', align: 'center' }); return; }
-          const def = OM.jokerDef(id);
-          OM.CARDS.drawJoker(ctx, def, x, y, { t, wobble: true, seed: pi, scale: 2 });
-          OM.FONT.draw(ctx, def.name, x + 40, y + 116, { color: '8', align: 'center', shadow: '0' });
-          OM.FONT.wrap(OM.HUD.defDesc(def), 150).slice(0, 5).forEach((ln, j) => OM.FONT.draw(ctx, ln, x + 40 - 75, y + 130 + j * 10, { color: '7' }));
-        });
-      }
+      if (cur >= 0) this.drawShop(ctx, t, S, cur);
+      else this.drawWaiting(ctx, t, S);
       // obstáculos de la partida que viene
       if (obs.length) {
         const oy = L.panel.y + 258;
@@ -354,6 +347,119 @@ OM.SCENES = OM.SCENES || {};
         OM.FONT.draw(ctx, OM.NET.error, CX, 152, { color: 'c', align: 'center', shadow: '0' });
         if (G.button(CX - 60, 172, 120, 18, 'SALIR AL MENÚ', 'dark')) { OM.NET.close(); OM.go('title'); }
       }
+    },
+    selOffer(S, pi) { const o = this.sel && this.sel.k != null ? MT.openShop(S).offers[pi][this.sel.k] : null; return o && !o.sold ? o : null; },
+    drawShop(ctx, t, S, pi) {
+      const G = OM.G, P = S.players[pi], sh = MT.openShop(S), offers = sh.offers[pi];
+      const ax = AREA.x, ay = AREA.y, aw = AREA.w;
+      const locked = this.paused;
+      // cabecera
+      OM.FONT.draw(ctx, 'TIENDA', ax + 10, ay + 6, { color: 'h', size: 2, shadow: '0' });
+      OM.FONT.draw(ctx, P.name + (MT.behind(S, pi) ? ' · vas por detrás: +1 carta' : ''), ax + 88, ay + 12, { color: PCOL[pi], shadow: '0' });
+      OM.FONT.draw(ctx, '$' + P.money, ax + aw - 10, ay + 6, { color: 'i', size: 2, align: 'right', shadow: '0' });
+      // ofertas agrupadas por tipo
+      const groups = ['comodin', 'hechizo', 'activo'];
+      const pos = []; let x = ax + 12;
+      groups.forEach((type) => {
+        const ks = offers.map((o, k) => k).filter((k) => MT.typeOf(offers[k].id) === type);
+        if (!ks.length) return;
+        const T = OM.JTYPE[type], gx = x;
+        ks.forEach((k) => { pos[k] = x; x += 48; });
+        const gw = x - gx - 8;
+        OM.FONT.draw(ctx, type === 'comodin' ? 'COMODINES' : T.short, gx + gw / 2, ay + 30, { color: T.color, align: 'center', shadow: '0' });
+        ctx.fillStyle = OM.PAL[T.color]; ctx.fillRect(gx, ay + 38, gw, 1);
+        x += 12;
+      });
+      const cy = ay + 44, appearT = OM.time - this.t0;
+      let hovK = -1;
+      offers.forEach((o, k) => {
+        const def = OM.jokerDef(o.id), cx = pos[k];
+        if (appearT < 0.15 + k * 0.08) { OM.CARDS.drawBack(ctx, cx, cy, 'joker', { t }); return; }
+        if (!this.flipped[pi + ':' + sh.roll[pi] + ':' + k]) { this.flipped[pi + ':' + sh.roll[pi] + ':' + k] = true; OM.META.seen[o.id] = 1; OM.sfx('card_flip', { pitch: 1 + k * 0.08 }); }
+        const sel = this.sel && this.sel.k === k, hov = !locked && !o.sold && G.inside(cx, cy, L.cardW, L.cardH);
+        if (hov) hovK = k;
+        OM.CARDS.drawJoker(ctx, def, cx, cy - (sel ? 4 : 0), { t, hover: hov, selected: sel, wobble: true, seed: k, alpha: o.sold ? 0.2 : 1 });
+        const cost = MT.price(o.id), can = P.money >= cost;
+        OM.FONT.draw(ctx, o.sold ? 'VENDIDO' : '$' + cost, cx + L.cardW / 2, cy + L.cardH + 4, { color: o.sold ? '5' : can ? 'i' : 'c', align: 'center', shadow: '0' });
+        if (hov) { G.cursor = 'grab'; if (G.clicked(cx, cy, L.cardW, L.cardH)) { this.sel = { k }; this.replaceUid = null; this.note = null; OM.sfx('card_flip'); } }
+        if (!locked && !o.sold && OM.IN.kp['Digit' + (k + 1)]) { this.sel = { k }; this.replaceUid = null; this.note = null; OM.sfx('card_flip'); }
+      });
+      // cambiar la tienda
+      const rc = MT.rerollCost(S, pi), rx = ax + aw - 100;
+      if (G.button(rx, ay + 50, 90, 18, rc ? 'CAMBIAR $' + rc : 'CAMBIAR GRATIS', 'blue', locked || P.money < rc)) {
+        MT.reroll(S, pi); this.sel = null; this.replaceUid = null; this.note = null; this.t0 = OM.time; OM.sfx('pack_open');
+      }
+      OM.FONT.draw(ctx, 'nuevas cartas', rx + 45, ay + 72, { color: '5', align: 'center' });
+      // detalle de la carta (la que está bajo el ratón, o la elegida)
+      const py = ay + 118, ph = 128, px = ax + 8, pw = aw - 16;
+      OM.UI.panel(ctx, px, py, pw, ph, 'inset');
+      const so = this.selOffer(S, pi);
+      const ownJ = this.sel && this.sel.own ? P.jokers.find((J) => J.uid === this.sel.own) : null;
+      const showK = hovK >= 0 ? hovK : so ? this.sel.k : -1;
+      const show = showK >= 0 ? { def: OM.jokerDef(offers[showK].id), offer: showK } : ownJ ? { def: OM.jokerDef(ownJ.id), own: ownJ } : null;
+      if (!show) this.drawPay(ctx, S, pi, px, py, pw);
+      else {
+        const def = show.def, type = OM.jtype(def), r = OM.RARITY[def.rarity];
+        OM.CARDS.drawJoker(ctx, def, px + 8, py + 10, { t, wobble: true, seed: 9, scale: 2 });
+        const tx = px + 98, tw = pw - 104;
+        OM.FONT.draw(ctx, def.name, tx, py + 8, { color: '8', size: 2, shadow: '0' });
+        OM.FONT.draw(ctx, OM.JTYPE[type].short, tx, py + 28, { color: OM.JTYPE[type].color, shadow: '0' });
+        OM.FONT.draw(ctx, r.name.toUpperCase(), tx + OM.FONT.measure(OM.JTYPE[type].short) + 8, py + 28, { color: r.color, shadow: '0' });
+        const desc = show.own ? OM.HUD.jokerDesc(show.own) : OM.HUD.defDesc(def);
+        let yy = py + 42;
+        OM.FONT.wrap(desc, tw).slice(0, 4).forEach((ln) => { OM.FONT.draw(ctx, ln, tx, yy, { color: '7' }); yy += 11; });
+        OM.FONT.draw(ctx, OM.JTYPE[type].desc, tx, yy + 2, { color: '5' });
+        // acciones
+        const by = py + ph - 24;
+        if (show.own) {
+          const v = MT.sellPrice(show.own.id);
+          if (G.button(tx, by, 120, 18, 'VENDER +$' + v, 'red', locked)) { MT.sell(S, pi, show.own.uid); this.note = { text: def.name + ' vendido (+$' + v + ')', color: 'h' }; this.sel = null; OM.sfx('coin'); }
+        } else if (show.offer === (so && this.sel.k)) {
+          const cost = MT.price(def.id);
+          const out = MT.displaced(S, pi, def.id, this.replaceUid);
+          const refund = out ? MT.sellPrice(out.id) : 0, can = P.money + refund >= cost;
+          let label = 'COMPRAR $' + cost, dis = !can || locked;
+          if (P.jokers.some((J) => J.id === def.id)) { label = 'YA LO TIENES'; dis = true; }
+          else if (out === undefined) { label = 'ELIGE A QUIÉN SACAR'; dis = true; OM.FONT.draw(ctx, 'Sin hueco: haz clic arriba en el comodín que quieres cambiar.', tx + 150, by + 5, { color: 'c' }); }
+          else if (out) OM.FONT.draw(ctx, 'Sale ' + OM.jokerDef(out.id).name + ' (te devuelven $' + refund + ')', tx + 150, by + 5, { color: '6' });
+          if (G.button(tx, by, 140, 18, label, 'green', dis, 'KeyB')) this.buy(pi, this.sel.k);
+        } else OM.FONT.draw(ctx, '$' + MT.price(def.id) + ' · clic para elegir', tx, by + 5, { color: 'i' });
+      }
+      if (this.note) OM.FONT.draw(ctx, this.note.text, ax + aw / 2, ay + AREA.h - 38, { color: this.note.color, align: 'center', shadow: '0' });
+      if (G.button(ax + aw / 2 - 70, ay + AREA.h - 26, 140, 20, '¡LISTO!', 'red', locked, 'Enter')) this.finish(pi);
+    },
+    // resumen del cobro y de cómo se gana dinero
+    drawPay(ctx, S, pi, px, py, pw) {
+      const pay = S.pay && S.pay.lines ? S.pay.lines[pi] : [];
+      OM.FONT.draw(ctx, S.pay && S.pay.match >= 0 ? 'COBRO DE LA PARTIDA ' + (S.pay.match + 1) : 'PARA EMPEZAR', px + 10, py + 8, { color: 'h', shadow: '0' });
+      pay.slice(0, 7).forEach((l, i) => {
+        const y = py + 22 + i * 11;
+        OM.FONT.draw(ctx, l.label, px + 14, y, { color: l.gone ? 'u' : l.info ? '6' : '7' });
+        if (l.v) OM.FONT.draw(ctx, (l.info ? '' : '+') + '$' + l.v, px + 200, y, { color: l.info ? '6' : 'i', align: 'right' });
+      });
+      const tx = px + 220, tw = pw - 228, SH = OM.SHOP, T = SH.trick;
+      const tips = [
+        '{h}DINERO{/}: sueldo $' + SH.wage + ' por partida; +$' + SH.loser + ' si la pierdes y +$' + SH.behind + ' si vas por detrás.',
+        '{h}TRUCOS{/}: doble +$' + T.double + ', triple +$' + T.triple + ', masacre +$' + T.massacre + ', salto o massé +$' + T.hop + ', de rebote +$' + T.kick + ', tacada +$' + T.streak + '. Máximo $' + SH.trickCap + ' por partida.',
+        'Vender devuelve la mitad.',
+      ];
+      let y = py + 8;
+      tips.forEach((p) => { OM.FONT.wrap(p, tw, 1).forEach((ln) => { OM.FONT.draw(ctx, ln, tx, y, { color: '6' }); y += 10; }); y += 3; });
+    },
+    drawWaiting(ctx, t, S) {
+      const ax = AREA.x + AREA.w / 2;
+      OM.FONT.draw(ctx, this.doneT != null ? '¡A LA MESA!' : 'ESPERANDO AL RIVAL...', ax, AREA.y + 8, { color: 'h', size: 2, align: 'center', shadow: '0', wave: 1, t });
+      S.players.forEach((P, pi) => {
+        const y = AREA.y + 50 + pi * 110;
+        OM.FONT.draw(ctx, P.name + ' · $' + P.money, AREA.x + 16, y, { color: PCOL[pi], shadow: '0' });
+        if (!this.done[pi]) { OM.FONT.draw(ctx, 'comprando...', AREA.x + 16, y + 16, { color: '5' }); return; }
+        if (!P.jokers.length) OM.FONT.draw(ctx, 'sin cartas', AREA.x + 16, y + 16, { color: '5' });
+        P.jokers.forEach((J, i) => {
+          const def = OM.jokerDef(J.id), x = AREA.x + 16 + i * 64;
+          OM.CARDS.drawJoker(ctx, def, x, y + 14, { t, wobble: true, seed: i + pi * 7 });
+          OM.FONT.wrap(def.name, 60).slice(0, 2).forEach((ln, j) => OM.FONT.draw(ctx, ln, x + 20, y + 72 + j * 10, { color: OM.JTYPE[OM.jtype(def)].color, align: 'center' }));
+        });
+      });
     },
   };
 
@@ -384,7 +490,7 @@ OM.SCENES = OM.SCENES || {};
         OM.UI.panel(ctx, x, y, pw, 196, pi === w ? 'gold' : 'dark');
         OM.FONT.draw(ctx, P.name, x + 12, y + 10, { color: PCOL[pi], size: 2, shadow: '0' });
         OM.FONT.draw(ctx, OM.fmt(P.points), x + pw - 12, y + 10, { color: '8', size: 2, align: 'right', shadow: '0' });
-        const rows = [['Partidas ganadas', P.wins + ' de ' + S.n], ['Mejor tiro', OM.fmt(P.stats.best)], ['Bolas embocadas', String(P.stats.balls)], ['Tiros', String(P.stats.shots)], ['Faltas', String(P.stats.fouls)], ['Taco', OM.cueDef(P.cue).name.replace('Taco ', '')]];
+        const rows = [['Partidas ganadas', P.wins + ' de ' + S.n], ['Mejor tiro', OM.fmt(P.stats.best)], ['Bolas embocadas', String(P.stats.balls)], ['Faltas', String(P.stats.fouls)], ['Dinero ganado', '$' + (P.stats.earned || 0)], ['Taco', OM.cueDef(P.cue).name.replace('Taco ', '')]];
         rows.forEach((r, i) => { OM.FONT.draw(ctx, r[0], x + 12, y + 38 + i * 13, { color: '6' }); OM.FONT.draw(ctx, r[1], x + pw - 12, y + 38 + i * 13, { color: '8', align: 'right' }); });
         const n = P.jokers.length, sp = Math.min(38, (pw - 24 - 30) / Math.max(1, n - 1));
         P.jokers.forEach((J, i) => {
@@ -402,21 +508,31 @@ OM.SCENES = OM.SCENES || {};
 
   // ---------------- COLECCIÓN ----------------
   OM.SCENES.collection = {
+    enter() { this.tab = this.tab || 'comodin'; },
     draw(ctx, t) {
       const G = OM.G;
       OM.UI.drawBackground(ctx, t, 'map');
-      OM.FONT.draw(ctx, 'COLECCIÓN DE COMODINES', CX, 12, { color: '8', size: 2, align: 'center', shadow: '0' });
-      const per = 13, cw = 40, ch = 54, gx = 6, gy = 12;
+      OM.FONT.draw(ctx, 'COLECCIÓN', CX, 8, { color: '8', size: 2, align: 'center', shadow: '0' });
+      const tabs = ['comodin', 'hechizo', 'activo'];
+      tabs.forEach((type, i) => {
+        const T = OM.JTYPE[type], n = OM.JOKERS.filter((j) => OM.jtype(j) === type).length;
+        const seen = OM.JOKERS.filter((j) => OM.jtype(j) === type && OM.META.seen[j.id]).length;
+        if (G.button(CX - 207 + i * 140, 30, 134, 16, (type === 'comodin' ? 'COMODINES' : T.short + 'S') + ' ' + seen + '/' + n, this.tab === type ? 'gold' : 'dark')) this.tab = type;
+      });
+      const T = OM.JTYPE[this.tab];
+      OM.FONT.draw(ctx, T.desc, CX, 52, { color: T.color, align: 'center' });
+      const list = OM.JOKERS.filter((j) => OM.jtype(j) === this.tab);
+      const per = 14, cw = 40, ch = 54, gx = 4, gy = 8;
       const x0 = CX - (per * cw + (per - 1) * gx) / 2;
-      OM.JOKERS.forEach((j, i) => {
-        const x = x0 + (i % per) * (cw + gx), y = 40 + Math.floor(i / per) * (ch + gy);
+      list.forEach((j, i) => {
+        const x = x0 + (i % per) * (cw + gx), y = 66 + Math.floor(i / per) * (ch + gy);
         const seen = OM.META.seen[j.id];
         if (seen) OM.CARDS.drawJoker(ctx, j, x, y, { t, hover: G.inside(x, y, cw, ch) });
         else OM.CARDS.drawBack(ctx, x, y, 'joker', { t });
         if (G.inside(x, y, cw, ch)) {
-          const rl = OM.RARITY[j.rarity];
-          if (seen) G.tooltip(x + cw / 2, y + ch + 4, j.name, OM.HUD.defDesc(j), rl.color, rl.name);
-          else G.tooltip(x + cw / 2, y + ch + 4, '???', 'Aún no ha salido en ninguna de tus series.', '5', rl.name);
+          const rl = OM.RARITY[j.rarity], price = '$' + OM.Match.price(j.id);
+          if (seen) G.tooltip(x + cw / 2, y + ch + 4, j.name, OM.HUD.defDesc(j), rl.color, OM.HUD.typeLabel(j) + ' · ' + price);
+          else G.tooltip(x + cw / 2, y + ch + 4, '???', 'Aún no ha salido en ninguna de tus tiendas.', '5', rl.name + ' · ' + price);
         }
       });
       if (G.button(CX - 50, 334, 100, 18, 'VOLVER', 'dark', false, 'Escape')) OM.go('title');
