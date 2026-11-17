@@ -35,6 +35,15 @@ Cambios del juego pensados para jugadores. Los detalles técnicos y los números
 - **Tienda con reloj de 20 s** (`OM.SHOP.time`). Al acabarse se cierra sola con lo que hayas comprado; los últimos 5 s parpadea y suena.
 - Online: el código de sala cambia de prefijo (las salas de 3.0 y 3.1 no se ven entre sí).
 
+### Chat en la mesa
+- **Chat a la derecha de la mesa**: tecla **T** o la pestaña del borde. Con el panel cerrado, los mensajes nuevos aparecen un momento arriba a la derecha y la pestaña cuenta los que no has leído. Enter envía, Esc deja de escribir.
+- **10 emojis propios** en pixel art: la 8, ¡dentro!, taco, tiza, en racha, calavera, jaja, lloro, plata y GG. Se escriben como `:fuego:` o desde la barra; un mensaje solo de emojis se ve en grande. Los emojis normales (😂 💀 🔥 💰 🎱) y `xD` se convierten solos.
+- **Frases rápidas**: ¡Buena!, Ups, Suerte, gg.
+- **Antispam**: como mucho 5 mensajes cada 10 s; si te pasas, silencio de 5 s que crece (10, 20, 30) si insistes. No se puede repetir el mismo mensaje en 20 s, las letras estiradas se recortan y los mensajes en mayúsculas pasan a minúsculas. Lo que llega del rival se limpia otra vez y, si inunda, queda silenciado 30 s. Botón para silenciarlo del todo.
+- Se ve cuándo el rival está escribiendo.
+- **Contra el bot**: el Tahúr saluda, se burla de tus faltas, presume de sus tiros y te contesta.
+- Online: nuevo prefijo de sala (`v31c`) para que una versión sin chat no se cruce con una con chat.
+
 ## 3.0 — Pool arcade 1v1 · 2026-11-16 (sin publicar, en playtest)
 
 ### Online sin servidor (3.0c)

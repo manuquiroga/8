@@ -43,7 +43,7 @@ window.OM = window.OM || {};
     unlockAudio();
     if (!IN.keys[e.code]) IN.kp[e.code] = true;
     IN.keys[e.code] = true;
-    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) IN.typed += e.key;
+    if (e.key && [...e.key].length === 1 && !e.ctrlKey && !e.metaKey) IN.typed += e.key; // [...] para que un emoji cuente como uno
     if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   });
   window.addEventListener('keyup', (e) => { IN.keys[e.code] = false; });
@@ -166,7 +166,10 @@ window.OM = window.OM || {};
       OM._pendingSwitch.at -= dt;
       if (OM._pendingSwitch.at <= 0) { const f = OM._pendingSwitch.fn; OM._pendingSwitch = null; f(); }
     }
-    G.tip = null; G.cursor = 'normal'; IN.consumed = false;
+    G.tip = null; G.cursor = 'normal'; IN.consumed = false; OM.typing = false;
+    // el chat va antes que la escena: si estás escribiendo se queda el teclado (la mesa no lo ve)
+    let chatKeys = null;
+    try { if (OM.CHAT && OM.CHAT.update(dt)) { chatKeys = IN.keys; IN.keys = {}; IN.kp = {}; IN.typed = ''; } } catch (err) { console.error(err); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = OM.PAL['0']; ctx.fillRect(0, 0, W, H);
@@ -176,11 +179,13 @@ window.OM = window.OM || {};
         OM.scene.draw && OM.scene.draw(ctx, t);
         if (!OM.scene.drawsFX) OM.FX.draw(ctx);
       }
+      if (chatKeys) { IN.keys = chatKeys; chatKeys = null; }
       OM.FX.update(dt);
       G.drawTooltip();
       OM.FX.drawTransition(ctx);
       if (!IN.touch) OM.UI.cursor(ctx, Math.round(IN.mx), Math.round(IN.my), G.cursor);
     } catch (err) {
+      if (chatKeys) IN.keys = chatKeys;
       console.error(err);
       OM.lastError = String(err && err.stack || err);
       ctx.fillStyle = '#300'; ctx.fillRect(0, 0, W, 12);

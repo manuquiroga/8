@@ -8,7 +8,7 @@
 window.OM = window.OM || {};
 
 OM.NET = (function () {
-  const PREFIX = 'ocho-pool-v31-'; // cambia con cada versión incompatible del protocolo
+  const PREFIX = 'ocho-pool-v31c-'; // cambia con cada versión incompatible del protocolo (v31c: chat)
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const TIMEOUT = 20; // s sin noticias del rival = desconectado
   const N = {
@@ -18,6 +18,7 @@ OM.NET = (function () {
     lobby: {},          // último `hello` del rival {name, cue, ready}
     cfg: null,          // config que manda el anfitrión {mode}
     start: null,        // orden de empezar del anfitrión
+    chat: [],           // mensajes de chat del rival (los consume OM.CHAT, en cualquier escena)
   };
   let P = null, conn = null, lastSeen = 0, beat = null;
 
@@ -31,7 +32,7 @@ OM.NET = (function () {
     return m ? m[1].toUpperCase() : null;
   };
 
-  function reset() { N.inbox = []; N.shops = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
+  function reset() { N.inbox = []; N.chat = []; N.shops = {}; N.lobby = {}; N.cfg = null; N.start = null; N.peer = false; N.error = null; N.wasPeer = false; }
   function handle(m) {
     lastSeen = Date.now();
     if (!m || !m.t || m.t === 'ping') return;
@@ -39,6 +40,7 @@ OM.NET = (function () {
     if (m.t === 'cfg') { N.cfg = m; return; }
     if (m.t === 'start') { N.start = m; return; }
     if (m.t === 'shop') { N.shops[m.match + ':' + m.pi] = m.st; return; }
+    if (m.t === 'chat') { if (N.chat.length < 50) N.chat.push(m); return; } // nunca a la cola de la partida
     N.inbox.push(m);
   }
   function lost(why) {

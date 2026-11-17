@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#07050d}canvas{image-rendering:pixelated;width:1280px;height:720px}</style>
+<canvas id="c" width="640" height="360"></canvas>
+<script src="../src/core/px.js"></script><script src="../src/art/font.js"></script><script src="../src/art/ui_art.js"></script><script src="../src/art/chat_art.js"></script>
+<script>
+// Vista previa de los emojis del chat: node tools/shot.js tools/preview_chat.html out.png
+(OM.ART_INIT||[]).forEach(f=>f());
+const ctx=document.getElementById('c').getContext('2d'); ctx.imageSmoothingEnabled=false;
+OM.UI.panel(ctx,10,10,620,340,'dark');
+OM.EMOTES.forEach((e,i)=>{
+  const s=OM.PX.get('emo_'+e.id), x=30+i*60;
+  ctx.drawImage(s.c,x,30); ctx.drawImage(s.c,x,60,44,44);
+  OM.FONT.draw(ctx,':'+e.id+':',x+22,112,{color:'6',align:'center'});
+});
+OM.EMOTES.forEach((e,i)=>{ctx.drawImage(OM.PX.get('emo_'+e.id).c,30+i*24,150,22,22);});
+</script>

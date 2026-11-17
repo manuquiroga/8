@@ -191,7 +191,7 @@ OM.SCENES = OM.SCENES || {};
     }
     if (kind !== 'human') return;
     const x = Math.min(Math.max(IN.mx, F.x + c.r), maxX), y = Math.min(Math.max(IN.my, F.y + c.r), F.y + F.h - c.r);
-    if (OM.G.inside(L.table.x, L.table.y, L.table.w, L.table.h)) {
+    if (OM.G.inside(L.table.x, L.table.y, L.table.w, L.table.h) && !OM.CHAT.over()) {
       if (PH.freeSpot(T.W, x, y, c.r, c)) { c.x = x; c.y = y; }
       OM.G.cursor = 'grab';
       if (IN.released && !IN.consumed && PH.freeSpot(T.W, c.x, c.y, c.r, c)) { IN.consumed = true; send({ t: 'place', x: c.x, y: c.y }); actPlace(c.x, c.y); return; }
@@ -284,7 +284,7 @@ OM.SCENES = OM.SCENES || {};
   }
 
   // ---------------- apuntar ----------------
-  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.my < L.bottom.y - 2 && IN.mx > 186; }
+  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.my < L.bottom.y - 2 && IN.mx > 186 && !OM.CHAT.over(); }
   const shakeOff = () => (T.mods.shake && ctl() !== 'remote' ? (Math.sin(OM.time * 7.3) * 0.03 + Math.sin(OM.time * 13.1) * 0.014) * T.mods.shake : 0);
   const aimAngle = () => T.angle + (T.phase === 'aim' ? shakeOff() : 0);
 
@@ -534,6 +534,8 @@ OM.SCENES = OM.SCENES || {};
     // las bolas que el juez devolvió a la mesa
     if (out.rewound) { OM.FX.flash('u', 0.3, 0.4); OM.sfx('curse'); }
     out.respot.forEach((n) => { const b = T.W.balls.find((o) => o.num === n); if (b) { OM.FX.burst(b.x, b.y, 'smoke', 12); OM.FX.popText(b.x, b.y - 14, 'VUELVE LA ' + n, '7'); } });
+    if (out.foul) OM.CHAT.event('foul', T.shooter);
+    else if (out.total >= 600 || out.events.some((e) => e.k === 'type' && e.n >= 2)) OM.CHAT.event('big', T.shooter);
     if (S.M.winner != null) { endMatch(); return; }
     if (out.foul && S.M.inHand === 'any') OM.FX.popText(MID.x, MID.y + 40, 'BOLA EN MANO PARA ' + S.players[S.M.turn].name.toUpperCase(), PCOL[S.M.turn], { size: 2 });
     else if (out.cont && S.M.streak[S.M.turn] >= 2) OM.FX.popText(MID.x, MID.y + 36, '¡SIGUE! TACADA x' + (S.M.streak[S.M.turn] + 1), 'v');
@@ -548,6 +550,7 @@ OM.SCENES = OM.SCENES || {};
     const human = S.players[M.winner].kind === 'human';
     OM.sfx(human || S.players.every((p) => p.kind !== 'human') ? 'win_table' : 'lose');
     OM.FX.burst(MID.x, MID.y, 'gold', 40); OM.FX.flash(PCOL[M.winner], 0.25, 0.4);
+    OM.CHAT.event('win', M.winner);
     try { OM.AUDIO.intensity(0); } catch (e) {}
   }
   function leave() {
@@ -737,6 +740,7 @@ OM.SCENES = OM.SCENES || {};
     }
     if (T.phase === 'intro') drawIntro(ctx, t);
     if (T.phase === 'end') drawEnd(ctx, t);
+    OM.CHAT.draw(ctx, T.paused || T.help || (online() && !!OM.NET.error));
     if (T.help) drawHelp(ctx, t);
     if (T.paused) OM.drawPause(ctx, t, () => (T.paused = false));
     if (online() && OM.NET.error && T.phase !== 'end') drawNetError(ctx);
@@ -765,11 +769,13 @@ OM.SCENES = OM.SCENES || {};
     const S = S_(), M = S.M, G = OM.G, E = T.end, win = M.winner;
     E.t += 1 / 60;
     const lines = M.end.lines;
-    const w = 300, h = 122 + lines.length * 13, x = MID.x - w / 2, y = MID.y - h / 2 - 4;
+    // con el chat abierto el cartel se corre a la izquierda para no quedar debajo
+    const dock = OM.CHAT.docked(), cx = dock ? Math.round((L.table.x + dock.x) / 2) : MID.x;
+    const w = dock ? 274 : 300, h = 122 + lines.length * 13, x = cx - w / 2, y = MID.y - h / 2 - 4;
     ctx.globalAlpha = Math.min(0.6, E.t * 2); ctx.fillStyle = OM.PAL['0']; ctx.fillRect(L.table.x, L.table.y, L.table.w, L.table.h); ctx.globalAlpha = 1;
     OM.UI.panel(ctx, x, y, w, h, 'gold');
-    OM.FONT.draw(ctx, '¡PARTIDA PARA ' + S.players[win].name.toUpperCase() + '!', MID.x, y + 10, { color: PCOL[win], size: 2, align: 'center', shadow: '0', wave: 1, t });
-    if (M.end.reason) OM.FONT.draw(ctx, M.end.reason, MID.x, y + 31, { color: 'd', align: 'center' });
+    OM.FONT.draw(ctx, '¡PARTIDA PARA ' + S.players[win].name.toUpperCase() + '!', cx, y + 10, { color: PCOL[win], size: 2, align: 'center', shadow: '0', wave: 1, t });
+    if (M.end.reason) OM.FONT.draw(ctx, M.end.reason, cx, y + 31, { color: 'd', align: 'center' });
     lines.forEach((l, i) => {
       if (E.t < 0.4 + i * 0.3) return;
       if (!l.shown) { l.shown = true; OM.sfx('coin', { pitch: 1 + i * 0.1 }); }
@@ -786,7 +792,7 @@ OM.SCENES = OM.SCENES || {};
       OM.FONT.draw(ctx, OM.fmt(T.shown[pi]) + ' pts', x + w - 14, yb + pi * 16 + 2, { color: '8', align: 'right' });
     });
     const ready = E.t > 0.6 + lines.length * 0.3;
-    if (ready && G.button(MID.x - 70, y + h - 26, 140, 20, S.done ? 'VER RESULTADO' : 'SIGUIENTE PARTIDA', 'gold', false, 'Enter')) leave();
+    if (ready && G.button(cx - 70, y + h - 26, 140, 20, S.done ? 'VER RESULTADO' : 'SIGUIENTE PARTIDA', 'gold', false, 'Enter')) leave();
   }
 
   function drawHelp(ctx, t) {

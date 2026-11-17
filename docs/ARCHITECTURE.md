@@ -17,6 +17,8 @@ src/game/net.js         OM.NET — 1v1 online por sala, de navegador a navegador
 src/vendor/peerjs.min.js PeerJS 1.5.4 (MIT), copia local para que el build sea un solo archivo
 src/game/main.js        Bucle, entrada (ratón/táctil/teclado), GUI inmediata OM.G, persistencia META
 src/game/hud.js         OM.HUD — marcador de los dos jugadores, comodines del que tira y del rival
+src/game/chat.js        OM.CHAT — chat de la mesa (online o con el bot): panel plegable a la derecha, avisos, antispam en los dos lados
+src/art/chat_art.js     OM.EMOTES — emojis propios del chat (11x11), se escriben como :id:
 src/game/scene_table.js Escena de mesa: turnos (humano/bot/remoto), mandos, simulación, puntuación animada
 src/game/scene_menus.js Título, preparación, sala online, tienda, resultado, colección, pausa
 ```
@@ -29,6 +31,9 @@ src/game/scene_menus.js Título, preparación, sala online, tienda, resultado, c
 
 ## Online
 PeerJS: el anfitrión se registra en el servidor público de PeerJS con el id `ocho-pool-v31-<CÓDIGO>` y el invitado se conecta a ese id. Canal de datos fiable y ordenado, con latido para detectar desconexiones. El que tira es la autoridad. Envía sus mandos (`shoot`) y, al terminar, el estado completo (`sync`: serie + posiciones). El otro cliente simula el mismo tiro (paso fijo) y luego se ajusta al estado recibido. Las ofertas de la tienda salen de la semilla; al pulsar LISTO cada jugador manda su estado tras comprar (`shop`: comodines, dinero) y el otro lo aplica tal cual. El cobro (`OM.Match.payday`) es determinista y lo calculan los dos.
+
+## Chat
+`OM.CHAT.update` corre en `main.js` antes de la escena: si estás escribiendo, la escena no ve el teclado (se le pasa vacío) y los clics que caen en el chat no llegan a la mesa (`OM.CHAT.over()` también frena el apuntado). La mesa lo dibuja con `OM.CHAT.draw(ctx, bloqueado)` y le avisa de faltas, tiros grandes y victorias (`OM.CHAT.event`) para que el bot comente. En red viaja como `{t:'chat', v}` (y `{t:'chat', k:'typing'}`), fuera de la cola de partida (`OM.NET.chat`). El que recibe vuelve a limpiar el texto y aplica su propio límite: nunca se fía del otro cliente.
 
 ## Comodines
 Objetos de datos con hooks (`onBall`, `onShot`, `onMiss`, `onFoul`, `onRival*`, `onBreakBall`, `onMatchEnd`, `onPayday`, `mods`, `rival`, `active`). Ver la cabecera de `data.js`. *Espejo Roto* copia al comodín de su izquierda (solo comodines).
