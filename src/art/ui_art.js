@@ -821,71 +821,241 @@ OM.UI = (function () {
   }
 
   // ================================================================ FONDOS
-  // mesa de billar en perspectiva vista desde la barra: (cx, yTop, semiancho lejano, alto del paño, ensanche)
-  function pokerTable(g, cx, y0, hw, fh, spread) {
-    const ctx = g.ctx;
-    const P = (x, y, c) => { ctx.fillStyle = PAL[c]; ctx.fillRect(x, y, 1, 1); };
-    const rail = 6;
-    // patas y faldón
-    const yb = y0 + fh;
-    const fx0 = cx - hw - spread - rail, fx1 = cx + hw + spread + rail;
-    g.rect(fx0 + 14, yb + rail + 14, 14, 30, '0'); g.rect(fx1 - 28, yb + rail + 14, 14, 30, '0');
-    g.rect(fx0 + 16, yb + rail + 14, 4, 30, 'e'); g.rect(fx1 - 26, yb + rail + 14, 4, 30, 'e');
-    g.rect(fx0 - 1, yb + rail - 1, fx1 - fx0 + 2, 18, '0');
-    for (let y = yb + rail; y < yb + rail + 16; y++) for (let x = fx0; x < fx1; x++) {
-      const k = (y - yb - rail) / 16;
-      let v = 0.55 - k * 0.35 + (hash(x >> 2, 7) - 0.5) * 0.08;
-      if (y === yb + rail) v = 0.9;
-      const px = (x - fx0) % 64;
-      if (px < 2 || y === yb + rail + 15) v = 0.1;
-      P(x, y, pick(['0', 'e', 'f', 'g'], v, x, y));
-    }
-    // emblema: calavera de latón en el faldón
-    g.rows(cx - 4, yb + rail + 4, ['.ggggg.', 'ghhhhhg', 'h0hh0hg', 'ghhhhhf', '.g0g0f.', '..fff..'], null);
-    // banda (madera) alrededor del paño
-    for (let y = y0 - rail; y < yb + rail; y++) {
-      const k = clamp((y - y0) / fh, -0.3, 1.3);
-      const xl = Math.round(cx - hw - spread * k) - rail, xr = Math.round(cx + hw + spread * k) + rail;
-      for (let x = xl; x < xr; x++) {
-        const inFelt = y >= y0 && y < yb && x >= xl + rail && x < xr - rail;
-        if (inFelt) {
-          // paño: claro al centro (lámpara), oscuro a los lados, tramado sutil
-          const dx = (x - cx) / (hw + spread), dy = (y - y0 - fh * 0.45) / fh;
-          const v = 0.62 - dx * dx * 0.7 - dy * dy * 0.5 + (hash(x, y) < 0.05 ? -0.12 : 0);
-          P(x, y, pick(['j', 'k', 'l'], v, x, y));
+  // mesa de billar del título en primer plano: perspectiva real (cámara a 1,2 m del paño, 3,65 m de la banda
+  // cercana) trazada píxel a píxel. Cada píxel lanza un rayo y se queda con la primera superficie que toca:
+  // madera y cojín de la banda, cara del cojín, paño, troneras o faldón. Luego sombras, bolas (esferas
+  // sombreadas) y el taco. Trabaja sobre m (canvas del fondo ya pintado) y respeta lo que queda detrás.
+  function titleTable(m) {
+    const img = m.ctx.getImageData(0, 0, W, H), d = new Uint32Array(img.data.buffer);
+    const rev = {};
+    for (const k in P32) rev[P32[k]] = k;
+    const get = (x, y) => rev[d[y * W + x]] || '0';
+    const set = (x, y, k) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < H && k) d[y * W + x] = P32[k]; };
+    const darken = (x, y, n) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= W || y >= H) return; let k = get(x, y); for (let i = 0; i < n; i++) k = SHADE[k]; set(x, y, k); };
+    // ---- cámara y medidas (metros)
+    const F = 612, CH = 1.2, YH = 148.6, CXS = 320;
+    const LX = 1.27, Z0 = 3.65, Z1 = Z0 + 1.27, ZM = (Z0 + Z1) / 2; // paño: u∈[-LX,LX], z∈[Z0,Z1]
+    const CW = 0.05, RW = 0.16, RH = 0.04, PR = 0.068, BR = 0.038;   // cojín, banda total, alto banda, tronera, bola (un poco grande: se lee mejor)
+    const sx = (u, z) => CXS + F * u / z, sy = (z, h) => YH + F * (CH - (h || 0)) / z;
+    const at = (x, y, h) => { const z = F * (CH - h) / (y + 0.5 - YH); return { u: (x + 0.5 - CXS) * z / F, z }; };
+    const POCK = [[-LX - 0.02, Z0 - 0.02], [0, Z0 - 0.035], [LX + 0.02, Z0 - 0.02], [-LX - 0.02, Z1 + 0.02], [0, Z1 + 0.035], [LX + 0.02, Z1 + 0.02]];
+    const pocketD = (u, z) => { let b = 9; POCK.forEach(([pu, pz]) => { const dd = Math.hypot(u - pu, z - pz); if (dd < b) b = dd; }); return b; };
+    const inFelt = (p) => Math.abs(p.u) <= LX && p.z >= Z0 && p.z <= Z1;
+    const inOuter = (p) => Math.abs(p.u) <= LX + RW && p.z >= Z0 - RW && p.z <= Z1 + RW;
+    // luz: lámpara sobre el centro del paño (charco de luz) y algo de las velas del fondo
+    const lamp = (u, z) => clamp(1 - Math.pow(u / 1.75, 2) - Math.pow((z - ZM) / 1.05, 2), 0, 1);
+    const FELT = ['0', 'j', 'k', 'l'];
+    const feltV = (u, z, x, y) => {
+      const lp = lamp(u, z);
+      let v = 0.14 + lp * 0.5 + lp * lp * 0.3;
+      const edge = Math.min(LX - Math.abs(u), z - Z0, Z1 - z); // sombra del cojín sobre el paño
+      if (edge < 0.035) v -= (0.035 - edge) * 4;
+      if (hash(x, y) < 0.06) v -= 0.08; // pelo del paño
+      return v;
+    };
+    const WOOD = ['0', '1', '9', 'e', 'f', 'g'];
+    const BRASS = ['e', 'f', 'g', 'h', 'i'];
+    // ---- 1. superficies de la mesa
+    const YT = Math.floor(sy(Z1 + RW, RH)) - 1;
+    for (let y = YT; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = at(x, y, RH);
+      if (!(p.z > 0)) continue;
+      const pd = pocketD(p.u, p.z);
+      if (inOuter(p)) {
+        if (pd < PR) { // boca de la tronera: cuero oscuro con el borde más claro
+          set(x, y, pd > PR - 0.012 ? (p.z < ZM ? '1' : 'e') : '0');
+          continue;
+        }
+        if (!inFelt(p)) {
+          const du = Math.abs(p.u) - LX, dz = Math.max(Z0 - p.z, p.z - Z1);
+          const side = du > dz; // banda lateral (veta a lo largo de z) o larga (veta a lo largo de u)
+          const out = Math.min(LX + RW - Math.abs(p.u), side ? 9 : (p.z < ZM ? p.z - (Z0 - RW) : Z1 + RW - p.z));
+          const inner = Math.max(du, dz); // 0 en el borde del paño
+          if (inner < CW) { // cojín: paño sobre la goma, un poco más oscuro que la mesa
+            let v = feltV(p.u, p.z, x, y) * 0.85;
+            if (inner > CW - 0.012) v -= 0.18;
+            set(x, y, pick(FELT, v, x, y));
+            continue;
+          }
+          if (pd < PR + 0.07) { // cantonera de latón alrededor de cada tronera
+            const r = (pd - PR) / 0.07;
+            let v = 0.75 - r * 0.35 + lamp(p.u, p.z) * 0.15;
+            if (r > 0.86) v = 0.12;
+            if (r < 0.14) v = 0.95;
+            set(x, y, pick(BRASS, v, x, y));
+            continue;
+          }
+          // madera: veta + lámpara + bisel claro junto al cojín y canto oscuro por fuera
+          const g1 = side ? vnoise(p.z * 26, p.u * 170) : vnoise(p.u * 26, p.z * 170);
+          let v = 0.3 + lamp(p.u * 0.8, p.z) * 0.32 + (g1 - 0.5) * 0.26;
+          if (inner < CW + 0.014) v += 0.3; // bisel pulido
+          if (out < 0.012) v = 0.06;
+          else if (out < 0.026) v -= 0.12;
+          set(x, y, pick(WOOD, v, x, y));
+          continue;
+        }
+        // dentro del paño a la altura de la banda: el rayo baja hasta el paño o choca con la cara del cojín
+        const q = at(x, y, 0);
+        if (inFelt(q)) {
+          const qd = pocketD(q.u, q.z);
+          if (qd < PR) { set(x, y, '0'); continue; }
+          set(x, y, pick(FELT, feltV(q.u, q.z, x, y), x, y));
         } else {
-          let v = 0.55;
-          if (y === y0 - rail) v = 0.95; else if (y === y0 - rail + 1) v = 0.75;
-          if (y >= yb) v = 0.65 - (y - yb) / rail * 0.3;
-          if (y === yb + rail - 1) v = 0.1;
-          if (x === xl || x === xr - 1) v = 0.05;
-          // canto interior (cojín) más oscuro
-          if (y >= y0 - 2 && y < y0 && x > xl + rail - 2 && x < xr - rail + 1) v = 0.2;
-          if (y < yb && y >= y0 && (x === xl + rail - 1 || x === xr - rail)) v = 0.2;
-          P(x, y, pick(['0', 'e', 'f', 'g', 'h'], v, x, y));
+          // cara del cojín (lejano o laterales): arriba un filo de luz, abajo sombra
+          const zf = q.z > Z1 ? Z1 : LX * F / Math.max(1, Math.abs(x + 0.5 - CXS)); // dónde el rayo cruza la cara
+          const h = CH - (y + 0.5 - YH) * zf / F;
+          const f = clamp(h / RH, 0, 1);
+          if (qd2(q) < PR) { set(x, y, '0'); continue; }
+          let v = 0.16 + f * 0.3 + lamp(p.u, p.z) * 0.2;
+          if (f > 0.8) v += 0.2;
+          set(x, y, pick(FELT, v, x, y));
+        }
+        continue;
+      }
+      // faldón de la banda cercana (cara que mira a la cámara)
+      if (p.z < Z0 - RW) {
+        const zf = Z0 - RW, h = CH - (y + 0.5 - YH) * zf / F, u = (x + 0.5 - CXS) * zf / F;
+        if (h < RH && h > -0.5 && Math.abs(u) <= LX + RW) {
+          const panel = ((u + 3) * 4.5) % 1;
+          let v = 0.3 + lamp(u * 0.7, ZM) * 0.12 + (vnoise(u * 30, h * 140) - 0.5) * 0.12;
+          if (h > RH - 0.012) v = 0.12; // sombra bajo el canto
+          else if (panel < 0.03 || panel > 0.97) v = 0.08; // juntas de los paneles
+          else if (panel < 0.07) v += 0.12;
+          set(x, y, pick(WOOD, v, x, y));
         }
       }
     }
-    // diamantes de banda
-    for (let i = 1; i < 8; i++) { if (i === 4) continue; const x = Math.round(cx - hw + (2 * hw) * i / 8); P(x, y0 - rail + 3, 'i'); }
-    // troneras
-    const pocket = (x, y) => { g.rect(x - 4, y - 2, 9, 5, '0'); g.rect(x - 3, y - 3, 7, 7, '0'); g.rect(x - 2, y - 2, 5, 1, '1'); };
-    pocket(cx - hw - 1, y0 - 1); pocket(cx + hw + 1, y0 - 1); pocket(cx, y0 - 3);
-    pocket(cx - hw - spread - 1, yb + 1); pocket(cx + hw + spread + 1, yb + 1); pocket(cx, yb + 3);
-    // bolas sobre el paño
-    const ball = (x, y, c, stripe) => {
-      g.rect(x - 2, y + 3, 6, 1, 'j');
-      g.rect(x - 2, y - 3, 5, 7, '0'); g.rect(x - 3, y - 2, 7, 5, '0');
-      g.rect(x - 2, y - 2, 5, 5, c); g.rect(x - 1, y - 3, 3, 1, c); g.rect(x - 1, y + 3, 3, 1, c);
-      if (stripe) { g.rect(x - 2, y - 2, 5, 1, '7'); g.rect(x - 2, y + 2, 5, 1, '7'); }
-      g.p(x - 1, y - 1, c === '1' ? '5' : '8'); g.rect(x + 1, y + 1, 2, 2, c === '7' ? '6' : c === '1' ? '0' : '9');
-      if (c === '1') { g.p(x, y, '7'); g.p(x + 1, y, '7'); }
+    function qd2(q) { return pocketD(q.u, q.z); }
+    // sombra de la mesa en el suelo: lo que no es mesa pero cae sobre su planta (algo ensanchada)
+    for (let y = YT; y < H; y++) for (let x = 0; x < W; x++) {
+      if (inOuter(at(x, y, RH)) || at(x, y, RH).z < Z0 - RW) continue;
+      const f = at(x, y, -0.75);
+      const ex = Math.max(Math.abs(f.u) - (LX + RW), Z0 - RW - f.z, f.z - (Z1 + RW));
+      if (ex < 0.02) darken(x, y, 2);
+      else if (ex < 0.3 && bayer(x, y) > ex / 0.3) darken(x, y, 1);
+    }
+    // diamantes de nácar en las bandas
+    const diamond = (u, z) => {
+      const x = Math.round(sx(u, z)), y = Math.round(sy(z, RH));
+      set(x, y - 1, '8'); set(x - 1, y, '7'); set(x, y, '8'); set(x + 1, y, '6'); set(x, y + 1, '6');
     };
-    ball(cx - 60, y0 + 14, '7'); ball(cx + 30, y0 + 10, '1'); ball(cx + 44, y0 + 20, 'c'); ball(cx + 52, y0 + 9, 'h', true);
-    ball(cx + 80, y0 + 24, 'q'); ball(cx - 110, y0 + 26, 'm', true);
-    // taco cruzado sobre la mesa
-    g.line(cx - 160, y0 + 34, cx - 66, y0 + 15, '0'); g.line(cx - 160, y0 + 33, cx - 66, y0 + 14, 'f'); g.line(cx - 160, y0 + 32, cx - 100, y0 + 20, 'e');
-    g.line(cx - 72, y0 + 16, cx - 66, y0 + 14, '7'); g.p(cx - 65, y0 + 14, 'q');
+    const mid = CW + (RW - CW) / 2;
+    for (let i = 1; i < 8; i++) { if (i === 4) continue; const u = -LX + (2 * LX) * i / 8; diamond(u, Z1 + mid); diamond(u, Z0 - mid); }
+    [1, 2, 3].forEach((i) => { const z = Z0 + (Z1 - Z0) * i / 4; diamond(-LX - mid, z); diamond(LX + mid, z); });
+    // ---- 2. sombras de bolas y taco sobre el paño
+    const BALLS = [
+      { u: -0.27, z: 3.86, c: 'cue' }, { u: 0.06, z: 4.24, c: '8', n: 8 },
+      { u: 0.58, z: 4.5, c: '3' }, { u: 0.655, z: 4.545, c: '1', s: 1 }, { u: 0.585, z: 4.585, c: '6' },
+      { u: -0.92, z: 4.72, c: '2' }, { u: 0.27, z: 4.82, c: '5', s: 1 }, { u: 1.02, z: 4.05, c: '4' }, { u: -0.98, z: 4.28, c: '7', s: 1 },
+    ];
+    BALLS.forEach((b) => {
+      const cx = sx(b.u, b.z), cy = sy(b.z, 0) + 0.5, rx = F * BR * 1.15 / b.z, ry = rx * 0.32;
+      for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+        const e = Math.pow((x + 0.5 - cx - rx * 0.12) / rx, 2) + Math.pow((y + 0.5 - cy) / ry, 2);
+        if (e < 0.55) darken(x, y, 2); else if (e < 1 && bayer(x, y) > e - 0.55) darken(x, y, 1);
+      }
+    });
+    // taco: de la punta (junto a la blanca) hacia la cámara, subiendo para pasar por encima de la banda
+    const cb = BALLS[0], tg = BALLS[1];
+    const dl = Math.hypot(tg.u - cb.u, tg.z - cb.z), du = (tg.u - cb.u) / dl, dz = (tg.z - cb.z) / dl;
+    const tip = { u: cb.u - du * (BR + 0.035), z: cb.z - dz * (BR + 0.035), h: BR * 0.9 };
+    const LEN = 1.45;
+    const cue = (s) => ({ u: tip.u - du * LEN * s, z: tip.z - dz * LEN * s, h: tip.h + s * 0.2 });
+    for (let s = 0; s < 0.6; s += 0.002) { // sombra del taco (solo sobre el paño)
+      const c = cue(s), u = c.u + 0.02, z = c.z;
+      if (!inFelt({ u, z })) continue;
+      const blur = 1 + Math.floor(s * 4);
+      for (let k = 0; k < blur; k++) darken(Math.round(sx(u, z)), Math.round(sy(z, 0)) + k, 1);
+    }
+    // ---- 3. bolas
+    const RAMPS = {
+      cue: ['3', '5', '6', '7', '8'], white: ['4', '5', '6', '7', '8'],
+      1: ['e', 'f', 'g', 'h', 'i'], 2: ['o', 'p', 'q', 'r'], 3: ['9', 'a', 'b', 'c', 'd'], 4: ['1', 's', 't', 'u'],
+      5: ['e', 'f', 'v', 'd'], 6: ['j', 'k', 'l', 'm'], 7: ['1', '9', 'a', 'b'], 8: ['0', '1', '2', '3', '4'],
+    };
+    const Ld = (() => { const v = [-0.45, -0.75, 0.5], n = Math.hypot(...v); return v.map((a) => a / n); })();
+    const Hd = (() => { const v = [Ld[0], Ld[1], Ld[2] + 1], n = Math.hypot(...v); return v.map((a) => a / n); })();
+    const order = BALLS.slice().sort((a, b) => b.z - a.z); // de lejos a cerca
+    order.forEach((b) => {
+      const cx = sx(b.u, b.z), cy = sy(b.z, BR), r = F * BR / b.z;
+      for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++) for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
+        const nx = (x + 0.5 - cx) / r, ny = (y + 0.5 - cy) / r, q = nx * nx + ny * ny;
+        if (q > 1) continue;
+        const nz = Math.sqrt(1 - q);
+        const lam = Math.max(0, nx * Ld[0] + ny * Ld[1] + nz * Ld[2]);
+        let v = 0.12 + lam * 0.85;
+        if (ny > 0.55 && nz < 0.6) v += 0.12; // rebote de luz del paño
+        let ramp = RAMPS[b.c];
+        if (b.s && Math.abs(ny + nx * 0.15) > 0.45) ramp = RAMPS.white; // rayadas
+        const disc = nx * -0.1 + ny * -0.28 + nz * 0.955;              // círculo del número
+        if (b.c !== 'cue' && disc > 0.955) {
+          ramp = RAMPS.white; v = Math.max(v, 0.7);
+          if (b.n === 8 && disc > 0.985) { ramp = RAMPS[8]; v = 0.2; }
+        }
+        const spec = nx * Hd[0] + ny * Hd[1] + nz * Hd[2];
+        let k = ramp[Math.min(ramp.length - 1, Math.floor(clamp(v, 0, 0.999) * ramp.length))]; // sin tramado: en 10 px se ve sucio
+        if (spec > 0.975) k = '8'; else if (spec > 0.94 && bayer(x, y) > 0.5) k = ramp === RAMPS[8] ? '5' : '8';
+        if (q > 0.86 && v < 0.5) k = SHADE[k]; // contorno suave
+        set(x, y, k);
+      }
+    });
+    // ---- 4. taco (cilindro con punta de tiza, virola, eje de arce, flechas de ébano y empuñadura)
+    // Se proyecta como polilínea y cada píxel cercano se sombrea según su distancia al eje (f: -1 sombra .. 1 luz).
+    const pts = [];
+    for (let s = 0; s <= 1; s += 0.01) {
+      const c = cue(s);
+      pts.push({ s, X: sx(c.u, c.z), Y: sy(c.z, c.h), r: F * (0.0068 + s * 0.012) / c.z });
+    }
+    const cueCol = (s, f, x, y) => {
+      let ramp, v = 0.42 + f * 0.4;
+      if (s < 0.01) ramp = ['o', 'p', 'q', 'r'];
+      else if (s < 0.03) ramp = ['5', '6', '7', '8'];
+      else if (s < 0.5) ramp = ['e', 'f', 'g', 'h', 'i'];
+      else if (s < 0.512) { ramp = BRASS; v += 0.15; }
+      else if (s < 0.8) {
+        ramp = ['0', '1', 'e', 'f'];
+        const pt = (s - 0.512) / 0.2, ang = Math.abs(((f * 1.5 + 3) % 1.5) - 0.75) / 0.75; // flechas de arce en el ébano
+        if (pt < 1 && ang > pt) ramp = ['e', 'f', 'g', 'h', 'i'];
+      } else if (s < 0.95) {
+        ramp = ['1', '9', 'a', 'b'];
+        if (((s * 420 + f * 2.2) | 0) % 3 === 0) v -= 0.22; // trenzado de la empuñadura
+      } else ramp = ['0', '1', '2', '3'];
+      if (f > 0.7) v += 0.2; // brillo del barniz
+      if (f < -0.8) v -= 0.25;
+      return pick(ramp, v, 0, 0);
+    };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const A = pts[i], Bp = pts[i + 1];
+      const ex = Bp.X - A.X, ey = Bp.Y - A.Y, el = Math.hypot(ex, ey) || 1;
+      let nx = -ey / el, ny = ex / el; if (ny > 0) { nx = -nx; ny = -ny; } // normal hacia arriba = lado de la luz
+      const rmax = Math.max(A.r, Bp.r) + 1;
+      for (let y = Math.floor(Math.min(A.Y, Bp.Y) - rmax); y <= Math.max(A.Y, Bp.Y) + rmax; y++) {
+        if (y < 0 || y >= H) continue;
+        for (let x = Math.floor(Math.min(A.X, Bp.X) - rmax); x <= Math.max(A.X, Bp.X) + rmax; x++) {
+          const t = clamp(((x + 0.5 - A.X) * ex + (y + 0.5 - A.Y) * ey) / (el * el), 0, 1);
+          if ((t === 0 && i > 0) || (t === 1 && i < pts.length - 2)) continue;
+          const px = A.X + ex * t, py = A.Y + ey * t, r = Math.max(0.6, A.r + (Bp.r - A.r) * t);
+          const off = (x + 0.5 - px) * nx + (y + 0.5 - py) * ny, dist = Math.hypot(x + 0.5 - px, y + 0.5 - py);
+          if (dist > r) continue;
+          set(x, y, cueCol(A.s + (Bp.s - A.s) * t, clamp(off / r, -1, 1), x, y));
+        }
+      }
+    }
+    // ---- 5. tiza azul sobre la banda cercana
+    {
+      const x = Math.round(sx(0.82, Z0 - 0.1)), y = Math.round(sy(Z0 - 0.1, RH));
+      const rows = ['..rrrr.', '.rrr1rq', '.rrrrqq', 'qqqqqpp', 'qqqqqpp', 'qqqqqpo', 'pppppo.'];
+      rows.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== '.') set(x - 3 + i, y - 6 + j, row[i]); });
+      for (let i = -3; i < 5; i++) darken(x + i, y + 1, 1);
+    }
+    // ---- 6. placa de latón con calavera en el faldón
+    {
+      const y = Math.round(sy(Z0 - RW, RH)) + 2;
+      ['.ggggggg.', 'ghhhhhhhg', 'gh1hhh1hg', 'gh1hhh1hg', 'ghhh1hhhg', 'ghh1h1hhf', '.fffffff.'].forEach((row, j) => {
+        for (let i = 0; i < row.length; i++) if (row[i] !== '.') set(CXS - 4 + i, y + j, row[i]);
+      });
+    }
+    m.ctx.putImageData(img, 0, 0);
   }
   // pasada de iluminación: oscurece por pasos de paleta según light(x,y)∈[0,1] (solo en la carga)
   const SHADE = { '0': '0', '1': '0', '2': '1', '3': '2', '4': '3', '5': '4', '6': '5', '7': '6', '8': '7', '9': '1', a: '9', b: 'a', c: 'b', d: 'c', e: '1', f: 'e', g: 'f', h: 'g', i: 'h', j: '0', k: 'j', l: 'k', m: 'l', n: 'm', o: '1', p: 'o', q: 'p', r: 'q', s: '2', t: 's', u: 't', v: 'g' };
@@ -1007,19 +1177,44 @@ OM.UI = (function () {
     };
     curtain(0, 54, false);
     curtain(W - 54, 54, true);
-    // candelabros de pared (latón) con 3 velas
+    // candelabros de pared (latón): placa atornillada al ladrillo, dos brazos en voluta y tres velas.
+    // Primero su sombra tramada en la pared (la luz viene de las propias velas y del rosetón: cae abajo a la derecha).
+    const PLATE = [
+      '....0h0....', '...0ihg0...', '....0f0....', '...0ihg0...', '..0ihhgf0..', '..0ihhgf0..', '.0ihhggff0.',
+      '.0ih0g0ff0.', '.0ihhggff0.', '.0ihg0gff0.', '.0ihhggff0.', '..0ihhgf0..', '..0ihhgf0..', '...0hgf0...',
+      '...0hgf0...', '....0f0....', '....0g0....', '...0hgf0...', '...0ggf0...', '....0f0....', '.....0.....',
+    ];
     const sconce = (x, y) => {
-      g.rect(x - 14, y + 6, 29, 3, '0'); g.rect(x - 13, y + 6, 27, 1, 'h'); g.rect(x - 13, y + 7, 27, 1, 'g');
-      g.rect(x - 1, y + 8, 3, 14, '0'); g.rect(x, y + 8, 1, 13, 'g');
-      g.rect(x - 4, y + 20, 9, 4, '0'); g.rect(x - 3, y + 20, 7, 2, 'g'); g.p(x - 2, y + 20, 'i');
+      const armPts = (sg) => {
+        const out = [];
+        for (let t = 0; t <= 1.0001; t += 0.04) { // voluta: de la placa hacia fuera y arriba hasta el platillo
+          const a = 1 - t;
+          out.push([Math.round(a * a * (x + sg * 4) + 2 * a * t * (x + sg * 15) + t * t * (x + sg * 11)), Math.round(a * a * (y + 19) + 2 * a * t * (y + 22) + t * t * (y + 8))]);
+        }
+        return out;
+      };
+      const curl = (sg) => [[0, -2], [1, -2], [2, -1], [2, 0], [1, 1], [0, 1], [-1, 0]].map(([dx, dy]) => [x + sg * (6 + dx), y + 24 + dy]);
+      const silhouette = (fn) => {
+        PLATE.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== '.') fn(x - 5 + i, y + 8 + j); });
+        [-1, 1].forEach((sg) => { armPts(sg).forEach(([px, py]) => { fn(px, py - 1); fn(px, py); fn(px, py + 1); fn(px, py + 2); fn(px - 1, py); fn(px + 1, py); fn(px - 1, py + 1); fn(px + 1, py + 1); }); curl(sg).forEach(([px, py]) => { fn(px, py); fn(px + 1, py); fn(px, py + 1); }); });
+      };
+      silhouette((px, py) => { if ((px + py) & 1) g.p(px + 3, py + 3, '0'); }); // sombra
+      silhouette((px, py) => g.p(px, py, '0'));                                 // contorno
+      [-1, 1].forEach((sg) => {
+        armPts(sg).forEach(([px, py]) => { g.p(px, py, 'h'); g.p(px, py + 1, 'g'); });
+        curl(sg).forEach(([px, py], i) => g.p(px, py, i < 3 ? 'h' : 'f'));
+      });
+      g.rows(x - 5, y + 8, PLATE, null);
+      g.p(x, y + 7, 'g'); // la vela central se apoya en la placa
       [-11, 0, 11].forEach((dx, i) => {
         g.rect(x + dx - 3, y + 4, 7, 3, '0'); g.rect(x + dx - 2, y + 4, 5, 1, 'h'); g.rect(x + dx - 2, y + 5, 5, 1, 'f');
+        if (dx) { g.rect(x + dx - 1, y + 7, 3, 2, '0'); g.p(x + dx, y + 7, 'g'); } // cuello del platillo
         candleBody(g, x + dx - 1, y - (i === 1 ? 10 : 6), i === 1 ? 14 : 10);
       });
     };
     sconce(128, 160); sconce(512, 160);
     // mesa de billar en primer plano (perspectiva)
-    pokerTable(g, 320, 300, 250, 40, 34);
+    titleTable(m);
     return m.c;
   }
   function drawTitle(ctx, t) {
@@ -1043,7 +1238,7 @@ OM.UI = (function () {
     drawHalo(ctx, 512, 146, 16, 'i', fl(1) + 0.1);
     // niebla baja y ascuas
     drawFog(ctx, 236, 70, '4', 0.35, 6, t, 1);
-    drawFog(ctx, 270, 90, '5', 0.22, -10, t, 2);
+    drawFog(ctx, 270, 90, '5', 0.12, -10, t, 2); // suave: pasa por delante de la mesa
     embers(ctx, t, 46, 3, ['i', 'v', 'b'], 40, 360, 22);
     dust(ctx, t, 30, 9, '6', 230, 20, 180, 170);
   }
