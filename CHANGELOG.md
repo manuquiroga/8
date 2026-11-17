@@ -32,6 +32,7 @@ Cambios del juego pensados para jugadores. Los detalles técnicos y los números
 - **Taco de la Usura**: +$2 al cobrar y +200 por ganar una partida.
 - La colección se divide en pestañas: comodines, hechizos y activos.
 - **Volumen de música de 0 a 100** (título y pausa) en vez de sí/no. M silencia y recupera el volumen.
+- **Tienda con reloj de 20 s** (`OM.SHOP.time`). Al acabarse se cierra sola con lo que hayas comprado; los últimos 5 s parpadea y suena.
 - Online: el código de sala cambia de prefijo (las salas de 3.0 y 3.1 no se ven entre sí).
 
 ## 3.0 — Pool arcade 1v1 · 2026-11-16 (sin publicar, en playtest)

@@ -62,6 +62,7 @@ OM.MULTI_NAMES = ['', '¡DENTRO!', '¡DOBLE!', '¡TRIPLE!', '¡MASACRE!'];
 //  - Los hechizos duran una partida y los activos se gastan: el dinero se recicla en vez de acumularse.
 OM.SHOP = {
   slots: 4,                 // máximo de comodines (de puntos/dinero). Aparte: 1 hechizo + 1 activo.
+  time: 20,                 // segundos para comprar; al acabarse, la tienda se cierra sola
   start: 10,                // dinero para la primera tienda
   wage: 4,                  // sueldo tras cada partida
   loser: 2,                 // extra para quien pierde la partida

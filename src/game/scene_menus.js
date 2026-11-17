@@ -266,7 +266,7 @@ OM.SCENES = OM.SCENES || {};
       if (arg && arg.next) { MT.payday(S); S.matchIdx++; S.M = null; } // venimos de la mesa: cobro y siguiente partida
       MT.openShop(S);
       this.done = [false, false]; this.sel = null; this.replaceUid = null; this.note = null;
-      this.t0 = OM.time; this.doneT = null; this.paused = false; this.botT = 0.9; this.left = false; this.flipped = {}; this.shopper = -1;
+      this.t0 = OM.time; this.doneT = null; this.paused = false; this.botT = 0.9; this.left = false; this.flipped = {}; this.shopper = -1; this.shopT = OM.SHOP.time;
       OM.HUD.sel = null; OM.typing = false;
       OM.music('shop');
     },
@@ -280,6 +280,14 @@ OM.SCENES = OM.SCENES || {};
       const S = OM.S;
       if (OM.IN.kp.Escape) this.paused = !this.paused;
       this.botT -= dt;
+      // tiempo de compra del jugador local (en pausa se congela salvo online)
+      const cur = S.players.findIndex((P, pi) => P.kind === 'human' && !this.done[pi]);
+      if (cur >= 0 && cur === this.shopper && !(this.paused && !OM.NET.on)) {
+        const prev = Math.ceil(this.shopT);
+        this.shopT -= dt;
+        if (Math.ceil(this.shopT) !== prev && prev <= 5 && this.shopT > 0) OM.sfx('click', { pitch: 1.4 });
+        if (this.shopT <= 0) this.finish(cur);
+      }
       S.players.forEach((P, pi) => {
         if (this.done[pi]) return;
         if (P.kind === 'bot' && this.botT <= 0) { OM.AI.shop(S, pi); this.finish(pi); }
@@ -310,7 +318,7 @@ OM.SCENES = OM.SCENES || {};
       OM.UI.drawBackground(ctx, t, 'shop');
       // quién compra ahora en este dispositivo
       const cur = S.players.findIndex((P, pi) => P.kind === 'human' && !this.done[pi]);
-      if (cur !== this.shopper) { this.shopper = cur; this.sel = null; this.replaceUid = null; this.note = null; this.t0 = OM.time; }
+      if (cur !== this.shopper) { this.shopper = cur; this.sel = null; this.replaceUid = null; this.note = null; this.t0 = OM.time; this.shopT = OM.SHOP.time; }
       const view = cur >= 0 ? cur : S.players[S.me] && S.players[S.me].kind === 'human' ? S.me : 0;
       const obs = S.obstacles[S.matchIdx] || [];
       const lines = [
@@ -428,6 +436,12 @@ OM.SCENES = OM.SCENES || {};
       }
       if (this.note) OM.FONT.draw(ctx, this.note.text, ax + aw / 2, ay + AREA.h - 38, { color: this.note.color, align: 'center', shadow: '0' });
       if (G.button(ax + aw / 2 - 70, ay + AREA.h - 26, 140, 20, '¡LISTO!', 'red', locked, 'Enter')) this.finish(pi);
+      // reloj de la tienda
+      const secs = Math.max(0, Math.ceil(this.shopT)), low = this.shopT <= 5;
+      const bw = 100, bx = ax + aw - bw - 12, byy = ay + AREA.h - 20;
+      OM.FONT.draw(ctx, secs + 's', bx - 6, byy - 4, { color: low ? (Math.floor(t * 4) % 2 ? 'c' : '8') : 'h', align: 'right', shadow: '0' });
+      ctx.fillStyle = OM.PAL['0']; ctx.fillRect(bx, byy - 2, bw, 6);
+      ctx.fillStyle = OM.PAL[low ? 'c' : 'i']; ctx.fillRect(bx, byy - 2, Math.round(bw * Math.max(0, this.shopT) / OM.SHOP.time), 6);
     },
     // resumen del cobro y de cómo se gana dinero
     drawPay(ctx, S, pi, px, py, pw) {
