@@ -14,20 +14,20 @@
 ```
 Preparación (modo, tacos) -> [ Tienda -> Partida ] x5 -> Resultado de la serie
 ```
-- **Serie de 5 partidas.** Gana quien tenga **más puntos** al final (desempate: partidas ganadas).
+- **Serie de 5 partidas.** Gana quien tenga **más puntos** al final (desempate: partidas ganadas). Cada $ que sobra al final vale 50 puntos.
 - Ganar una partida da 1.000 / 1.250 / 1.500 / 2.000 / 3.000 puntos. Además, 100 por cada bola que le quede al rival.
 - **Tienda**: antes de cada partida cada jugador compra con dinero ($). Ver sección 6.
 - **Obstáculos** (los antiguos jefes): la partida 3 y la 4 traen uno, la final trae dos.
 - **Modos**: Bola 8 (principal), Bola 9, o Mixta (1, 3 y 5 a bola 8; 2 y 4 a bola 9).
 
 ## 3. Reglas
-**Bola 8.** Mesa abierta hasta que alguien emboca después del saque: ese jugador se queda el grupo de esa bola. Hay que tocar primero una bola propia. Si embocas una tuya, sigues. Con el grupo limpio, la 8 gana. Meter la 8 antes de tiempo (o con falta) pierde la partida. La 8 en el saque vuelve a la mesa.
+**Bola 8.** Mesa abierta hasta que alguien emboca después del saque: ese jugador se queda el grupo de esa bola. Hay que tocar primero una bola propia. Si embocas una tuya, sigues. Con el grupo limpio, la 8 gana. Meter la 8 antes de tiempo (o con falta) **pierde la serie entera** y deja tus puntos a 0. La 8 en el saque vuelve a la mesa.
 
 **Bola 9.** Hay que tocar primero la bola más baja. Todo lo que entre en un tiro legal cuenta. La 9 legal gana; en el saque o con falta, vuelve.
 
 **Falta** (blanca dentro, no tocar nada, tocar primero una bola que no toca, que tras el contacto ninguna bola toque banda sin embocar nada, o agotar los 30 s del tiro): -50 puntos y bola en mano para el rival.
 
-**Saque nerfeado.** El triángulo se coloca con una pequeña variación por semilla y el impulso de saque es mucho menor que en v1/v2. Las bolas del saque valen 25 puntos fijos, sin combo ni comodines, y no asignan grupo. Saca el que perdió la partida anterior.
+**Saque nerfeado.** El triángulo se coloca con una pequeña variación por semilla y el impulso de saque es mucho menor que en v1/v2. Las bolas del saque valen 25 puntos fijos, sin combo ni comodines, y no asignan grupo. Saca el que perdió la partida anterior; en la REVANCHA, el que perdió la serie.
 
 ## 4. Puntuación: Puntos x Combo
 | Cosa | Valor |
@@ -69,11 +69,24 @@ La guía simula la blanca con los mandos actuales, así que la curva y el arco d
 
 **Anti bola de nieve**: perder la partida +$2; ir por detrás en la serie +$2, una carta más y primer cambio gratis; sin intereses de base; hechizos y activos son consumibles. Medido con `node tools/simtest.js`: entre bots iguales, el que iba detrás tras la partida 3 gana ~40% de las series (con el draft era ~20%).
 
-**Contenido**: 53 comodines, 19 hechizos, 9 activos. 8 tacos. 12 obstáculos (troneras selladas, péndulo, ciénaga, escarcha, niebla, sin guía, troneras pequeñas, pilares, vórtice, portales, reloj de 15 s y verdugo).
+**Contenido**: 53 comodines, 27 hechizos, 13 activos. 8 tacos. 12 obstáculos (troneras selladas, péndulo, ciénaga, escarcha, niebla, sin guía, troneras pequeñas, pilares, vórtice, portales, reloj de 15 s y verdugo) y 5 condiciones solo del CAOS.
+
+## 6b. Modo CAOS
+Formato alternativo a la serie (campo `caos` de la serie; números en `OM.CAOS`, `src/game/data.js`). Pensado para partidas cortas y frenéticas.
+- **Una partida, sin puntos**: gana quien gane la partida. Fuera lo que solo da puntos (`pts: true`: Furia, Saqueo, Codicia, Atraco, Gran Golpe, Fiebre, Verdugo) y los comodines de los tacos. El dinero es solo para la tienda; +$2 por tienda si te quedan más bolas que al rival.
+- **Tienda dentro de la partida, solo en el turno del rival.** 5 cartas (trastada, trampa, hechizo propio, activo propio y una al azar), sin cambiar. Se compra 1 hechizo y 1 activo por turno del rival.
+- **Comprar = lanzar.** Rojo (trastadas, activos `anytime`): caen ya sobre el que tira y duran su turno. Azul (lo propio): se dispara al empezar tu turno (`caosTurnStart`). No hay cartas en mano.
+- **Tacada del rival** (nivel `OM.CAOS.rally`): la tienda del que espera se recarga con 5 trampas y vuelve a dejar comprar (`caosRally`).
+- **Mecha** (`OM.CAOS.fuse`, 5): como mucho 5 tiros seguidos. Se ve sobre la banda de arriba y se quema con cada tiro; al consumirse, el turno pasa sin falta ni bola en mano.
+- **EN JUEGO**: franja en los huecos de hechizo/activo con todo lo que afecta al tiro actual.
+- **Dinero**: inicio $5, +$3 por tienda (+$2 si vas detrás), +$1 por cada bola que mete el rival (`rivalBall`: munición contra las tacadas), trucos hasta $10, Bolsa del Diablo +$4. Precios $2-$6.
+- **Mesa cambiante**: cada 2 turnos sale una condición nueva de la semilla (los obstáculos menos el Verdugo + 4 propias: Bocazas, Lluvia de Oro, Rebajas, Turbo). Desde el turno 6, dos a la vez.
+- **Reloj**: 20 s por tiro; al acabarse, el taco dispara solo.
+- **Online**: cada compra es una acción numerada (`caosOp`) que se manda al rival; si llega después de su sync, el que compró la vuelve a aplicar encima. Probado con dos navegadores reales: estados idénticos en cada pausa.
 
 ## 7. Controles
 - Ratón/táctil: apunta, arrastra hacia atrás para cargar, suelta para tirar.
-- `WASD` efecto, `Q/E` (o flechas arriba/abajo) ángulo de golpe, `R` centrar, flechas izquierda/derecha y rueda: ajuste fino, `Espacio`: potencia, `M`: música.
+- `WASD` efecto, `Q/E` (o flechas arriba/abajo) ángulo de golpe, `R` centrar, flechas izquierda/derecha y rueda: ajuste fino, `Espacio`: potencia, `M`: música. `B`: abrir/cerrar la tienda en el modo CAOS.
 
 ## 8. Online
 Sala con código de 4 letras, de navegador a navegador (WebRTC con PeerJS). No hace falta servidor propio: el servidor público de PeerJS solo presenta a los jugadores, y su TURN hace de puente si la conexión directa falla. El juego se publica como sitio estático en Vercel. Ver `src/game/net.js`.

@@ -44,25 +44,27 @@ OM.Match = (function () {
   function give(S, pi, id) { const J = newJoker(S, pi, id); S.players[pi].jokers.push(J); sortJ(S.players[pi]); return J; }
 
   // cfg = {seed, mode:'8'|'9'|'mix', players:[{name, kind:'human'|'bot'|'remote', level, cue}]}
+  // cfg.caos = true: MODO CAOS (una partida, tienda dentro de la partida; ver OM.CAOS)
   function newSeries(cfg) {
     const seed = (cfg.seed == null ? Math.floor(Math.random() * 1e9) : cfg.seed) >>> 0;
+    const caos = !!cfg.caos, cash = caos ? OM.CAOS.start : OM.SHOP.start;
     const S = {
-      v: 3, seed, seedStr: OM.seedToStr(seed), mode: cfg.mode || '8', n: 5, matchIdx: 0, lastLoser: seed & 1, done: false,
-      players: cfg.players.map((p) => ({ name: p.name, kind: p.kind || 'human', level: p.level || null, cue: p.cue || 'peregrino', jokers: [], points: 0, wins: 0, money: OM.SHOP.start, uidN: 0, stats: { balls: 0, fouls: 0, best: 0, shots: 0, earned: OM.SHOP.start, spent: 0 } })),
+      v: 3, seed, seedStr: OM.seedToStr(seed), mode: cfg.mode || '8', n: caos ? 1 : 5, caos, matchIdx: 0, lastLoser: cfg.breaker != null ? cfg.breaker : seed & 1, done: false,
+      players: cfg.players.map((p) => ({ name: p.name, kind: p.kind || 'human', level: p.level || null, cue: p.cue || 'peregrino', jokers: [], points: 0, wins: 0, money: cash, uidN: 0, stats: { balls: 0, fouls: 0, best: 0, shots: 0, earned: cash, spent: 0 } })),
       obstacles: [], M: null, shop: null, paid: -1,
-      pay: { match: -1, lines: [0, 1].map(() => [{ label: 'Bolsa inicial', v: OM.SHOP.start }]) },
+      pay: { match: -1, lines: [0, 1].map(() => [{ label: 'Bolsa inicial', v: cash }]) },
     };
     const rng = OM.RNG(mix(seed, 11));
-    S.players.forEach((P, i) => {
+    if (!caos) S.players.forEach((P, i) => { // el CAOS no va de puntos: sin los comodines de los tacos
       const cue = OM.cueDef(P.cue);
       if (cue.joker) give(S, i, cue.joker);
       if (cue.randomJoker) give(S, i, rng.pick(OM.JOKERS.filter((j) => j.rarity === cue.randomJoker && !j.copy && OM.jtype(j) === 'comodin' && !(j.only8 && S.mode === '9'))).id);
     });
     // obstáculos: partidas 3 y 4 con uno, la final con dos (de grupos distintos)
-    const pool = rng.shuffle(OM.OBSTACLES.map((o) => o.id));
+    const pool = rng.shuffle(OM.OBSTACLES.filter((o) => !o.caos).map((o) => o.id));
     const a = pool[0], b = pool[1], c = pool[2];
     const d = pool.slice(3).find((id) => { const x = OM.obstacleDef(id), y = OM.obstacleDef(c); return !(x.grp && x.grp === y.grp); });
-    S.obstacles = [[], [], [a], [b], [c, d]];
+    S.obstacles = caos ? [[]] : [[], [], [a], [b], [c, d]];
     return S;
   }
   function matchMode(S, i) { return S.mode === 'mix' ? (i % 2 ? '9' : '8') : S.mode; }
@@ -78,10 +80,15 @@ OM.Match = (function () {
   function behind(S, pi) { return S.players[pi].points < S.players[1 - pi].points; }
   function countType(P, type) { return P.jokers.filter((J) => typeOf(J.id) === type).length; }
   function offers(S, pi, roll) {
-    const P = S.players[pi];
     const rng = OM.RNG(mix(mix(S.seed, S.matchIdx + 1), pi * 977 + roll * 31 + 101));
+    const n = SH.offers.comodin + (behind(S, pi) ? 1 : 0);
+    return pickOffers(S, pi, rng, S.matchIdx, { comodin: n, hechizo: SH.offers.hechizo, activo: SH.offers.activo });
+  }
+  // cartas al azar por rareza (i = nivel: sube la probabilidad de las raras). counts = {comodin, hechizo, activo}
+  function pickOffers(S, pi, rng, i, counts) {
+    const P = S.players[pi];
     const owned = new Set(P.jokers.map((j) => j.id)), taken = new Set();
-    const i = S.matchIdx, w = { comun: 60, raro: 30 + 3 * i, epico: 6 + 3 * i, legendario: 1 + 1.5 * i };
+    const w = { comun: 60, raro: 30 + 3 * i, epico: 6 + 3 * i, legendario: 1 + 1.5 * i };
     const ok = (j, type) => OM.jtype(j) === type && !owned.has(j.id) && !taken.has(j.id) && !(j.copy && !countType(P, 'comodin')) && !(j.only8 && S.mode === '9');
     const one = (type) => {
       for (let tries = 0; tries < 40; tries++) {
@@ -95,9 +102,7 @@ OM.Match = (function () {
       const id = rng.pick(any).id; taken.add(id); return id;
     };
     const out = [];
-    const n = SH.offers.comodin + (behind(S, pi) ? 1 : 0);
-    for (let k = 0; k < n; k++) { const id = one('comodin'); if (id) out.push({ id, sold: false }); }
-    ['hechizo', 'activo'].forEach((type) => { for (let k = 0; k < SH.offers[type]; k++) { const id = one(type); if (id) out.push({ id, sold: false }); } });
+    ['comodin', 'hechizo', 'activo'].forEach((type) => { for (let k = 0; k < (counts[type] || 0); k++) { const id = one(type); if (id) out.push({ id, sold: false }); } });
     return out;
   }
   // abre la tienda de la partida actual (idempotente)
@@ -209,6 +214,7 @@ OM.Match = (function () {
       pocketMul: 1, pocketPull: 1, powerMul: 1, guide: 1, guideLen: 1, trickMul: 1, pointsMul: 1, noScratch: false, shake: 0,
       foulCost: PT.foul, foulPct: 0, foulGift: 0, foulGiftPct: 0, bribed: false, retriggerFirst: false, keepStreak: false, allTrick: false,
       clock: PT.clock, noSpin: false, tilt: 0, frictionMul: 1, immune: false, kamikaze: false, hexed: false, boosted: false,
+      fog: false, lie: 0, sealSides: false, drunk: false, shrunk: false, rushed: false, fever: false, goldRain: false,
     };
     const P = S.players[pi], Rv = S.players[1 - pi], fx = S.M && S.M.fx;
     const cue = OM.cueDef(P.cue);
@@ -227,8 +233,15 @@ OM.Match = (function () {
         if (r.noSpin) m.noSpin = true;
         if (r.tilt) m.tilt += r.tilt;
         if (r.frictionMul) m.frictionMul *= r.frictionMul;
+        if (r.powerMul) m.powerMul *= r.powerMul;       // Taco de Plomo
+        if (r.fog) m.fog = true;                        // Niebla Negra
+        if (r.lie) m.lie = Math.max(m.lie, r.lie);      // Espejismo
+        if (r.seal) m.sealSides = true;                 // Cerrojo
+        if (r.drunk) { m.drunk = true; m.shake += 0.7; } // Borrachera
       });
       if (fx && fx.hex === pi) { m.shake += 1.6; rg -= 2; m.hexed = true; } // Muñeco Vudú
+      if (fx && fx.shrink === pi) { m.pocketMul *= 0.6; m.shrunk = true; } // Sabotaje
+      if (fx && fx.rush === pi) { m.clock = Math.min(m.clock, 8); m.rushed = true; } // Reloj de Arena
     }
     if (fx && fx.boost === pi) { m.pocketMul *= 1.6; m.boosted = true; } // Boca del Infierno
     m.guide = Math.max(0, m.guide + rg);
@@ -236,6 +249,12 @@ OM.Match = (function () {
     if (hasObs(S, 'ciego')) m.guide = 0;
     if (hasObs(S, 'verdugo')) m.foulCost = Math.max(m.foulCost, 300);
     if (hasObs(S, 'reloj')) m.clock = Math.min(m.clock, 15);
+    // condiciones del modo CAOS
+    if (S.caos) m.clock = Math.min(m.clock, OM.CAOS.clock);
+    if (hasObs(S, 'bocazas')) m.pocketMul *= 1.35;
+    if (hasObs(S, 'turbo')) m.powerMul *= 1.4;
+    if (hasObs(S, 'fiebre')) m.fever = true;
+    if (hasObs(S, 'lluvia')) m.goldRain = true;
     return m;
   }
 
@@ -245,12 +264,17 @@ OM.Match = (function () {
     const breaker = S.lastLoser; // saca el que perdió la anterior (la primera, por semilla)
     S.M = {
       mode, turn: breaker, breaker, breakShot: true, open: mode === '8', groups: [null, null], inHand: 'kitchen',
-      streak: [0, 0], shotIdx: 0, winner: null, obstacles: S.obstacles[i] || [], pts: [0, 0], gold: {}, end: null,
+      streak: [0, 0], chain: 0, shotIdx: 0, winner: null, obstacles: S.obstacles[i] || [], pts: [0, 0], gold: {}, end: null,
       tcash: [0, 0], // $ por trucos ganado en esta partida (con tope)
       // efectos de activos pendientes. boost/hex: índice del jugador afectado (-1 = nada)
-      fx: { bomb: false, rewind: false, free: false, boost: -1, hex: -1, xshot: [0, 0] },
+      fx: { bomb: false, rewind: false, free: false, boost: -1, hex: -1, xshot: [0, 0], rush: -1, shrink: -1 },
     };
     S.players.forEach((P) => P.jokers.forEach((J) => { J.used = false; const d = OM.jokerDef(J.id); if (d.onMatchStart) d.onMatchStart(S, J); }));
+    if (S.caos) {
+      // estado del CAOS (viaja dentro de M en el online). ops: nº de acciones de tienda aplicadas de cada jugador
+      S.M.caos = { turns: 0, n: 0, next: caosCond(S, 1, []), token: null, ops: [0, 0], startedAt: -1, shop: [0, 1].map(() => ({ win: 0, roll: 0, paid: 0, got: {}, rally: false, offers: [] })) };
+      [0, 1].forEach((pi) => caosWindow(S, pi, false));
+    }
     return S.M;
   }
   function worldOpts(S) {
@@ -296,13 +320,34 @@ OM.Match = (function () {
     const W = OM.Physics.create(worldOpts(S));
     rack(S, W);
     OM.Physics.addBall(W, { num: 0, kind: 'normal', x: HEAD_X - 30, y: MID.y });
+    if (S.caos) S.M.caos.token = spawnToken(S, W, 0);
     applyTurn(S, W);
     return W;
+  }
+  // aplica a la mesa las condiciones actuales (M.obstacles). En el CAOS cambian a mitad de partida.
+  function applyCond(S, W) {
+    const o = worldOpts(S);
+    W.baseSealed = !!o.sealedSides;
+    W.bumpers = o.bumpers || []; W.vortex = o.vortex || null; W.portals = o.portals || null;
+    W.base = { tilt: o.tilt || 0, decel: W.decelBase * (o.frictionMul || 1) };
+    W.condKey = S.M.obstacles.join(',');
+    // las bolas que quedan encima de un pilar o de un portal se apartan (siempre igual en los dos clientes)
+    W.balls.forEach((b) => {
+      if (!b.alive || OM.Physics.freeSpot(W, b.x, b.y, b.r, b)) return;
+      for (let k = 1; k < 120; k++) {
+        const a = k * 2.399, d = 4 + k * 0.6, x = b.x + Math.cos(a) * d, y = b.y + Math.sin(a) * d;
+        if (x < F.x + b.r || x > F.x + F.w - b.r || y < F.y + b.r || y > F.y + F.h - b.r) continue;
+        if (OM.Physics.freeSpot(W, x, y, b.r, b)) { b.x = x; b.y = y; b.vx = b.vy = 0; return; }
+      }
+    });
   }
   // al cambiar de turno: tamaño de troneras, imán y blanca fantasma del que tira
   function applyTurn(S, W) {
     const m = mods(S, S.M.turn);
-    if (!W.base) W.base = { tilt: W.tilt, decel: W.decel };
+    if (!W.base) { W.base = { tilt: W.tilt, decel: W.decel }; W.baseSealed = W.sealedSides; W.condKey = S.M.obstacles.join(','); }
+    if (W.condKey !== S.M.obstacles.join(',')) applyCond(S, W);
+    W.sealedSides = !!W.baseSealed || m.sealSides; // Cerrojo
+    W.tokens = S.M.caos && S.M.caos.token ? [S.M.caos.token] : null;
     W.pocketMul = m.pocketMul; W.pocketPull = m.pocketPull; W.noScratch = m.noScratch;
     W.tilt = W.base.tilt + m.tilt; W.decel = W.base.decel * m.frictionMul; // Mesa Torcida / Escarcha Negra
     OM.Physics.setPockets(W);
@@ -354,6 +399,12 @@ OM.Match = (function () {
     if (fx.free) { fx.free = false; cur.freeShot = true; }
     if (fx.boost === M.turn) fx.boost = -1; // las troneras ya están agrandadas para este tiro
     if (fx.hex === M.turn) fx.hex = -1;     // el temblor ya está aplicado a este tiro
+    if (fx.shrink === M.turn) fx.shrink = -1;
+    if (fx.rush === M.turn) fx.rush = -1;
+    // CAOS: los hechizos que afectan a este turno quedan "en juego" y se acaban cuando termine
+    if (S.caos) S.players.forEach((Pl, pi) => Pl.jokers.forEach((J) => { const d = OM.jokerDef(J.id); if (OM.jtype(d) === 'hechizo' && spellTarget(pi, d) === M.turn) J.live = true; }));
+    // Borrachera: efecto al azar (sale de la semilla: igual en los dos clientes)
+    if (m.drunk && !m.noSpin) { const r = OM.RNG(mix(S.seed, 9000 + M.shotIdx)); p = Object.assign({}, p, { spin: { f: (r() * 2 - 1) * 0.8, s: (r() * 2 - 1) * 0.8 } }); cur.spun = true; cur.drunk = true; }
     if (fx.rewind) { fx.rewind = false; cur.snap = { s: JSON.parse(JSON.stringify(serialize(S))), balls: OM.Physics.snap(W) }; }
     if (m.noSpin) { p = Object.assign({}, p, { spin: { f: 0, s: 0 }, elev: 0 }); cur.spun = false; cur.elev = 0; } // Grilletes
     const tr = OM.Physics.shoot(W, cue, p.angle, shotSpeed(p.power, m), p.spin, p.elev || 0, m.trickMul);
@@ -373,6 +424,8 @@ OM.Match = (function () {
     } else if (e.type === 'cushion' || e.type === 'bumper') {
       if (cur.firstHit != null) cur.railAfter = true; // tras el contacto alguna bola tocó banda
       if (e.ball.num === 0) { if (!e.jaw) cur.cueCushions++; } else cur.banked[e.ball.num] = true;
+    } else if (e.type === 'token') {
+      cur.token = true;
     } else if (e.type === 'pocket') {
       if (e.ball.num === 0) cur.scratch = true;
       else cur.pocketed.push({ num: e.ball.num, pocket: { x: e.pocket.x, y: e.pocket.y, corner: e.pocket.corner }, banked: !!cur.banked[e.ball.num] });
@@ -484,7 +537,10 @@ OM.Match = (function () {
     }
     // Marcha Atrás: si el tiro no te sirvió (fallo, falta, la 8 antes de tiempo), se deshace entero
     if (cur.snap && out.win !== me && !(own.length && !foul && !lose)) {
+      // en el CAOS lo que compró el rival mientras rodaban las bolas no se deshace
+      const keep = M.caos ? { P: JSON.parse(JSON.stringify(serialize(S).players[rv])), shop: M.caos.shop[rv], ops: M.caos.ops[rv] } : null;
       applySync(S, cur.snap.s);
+      if (keep) { Object.assign(S.players[rv], keep.P); S.M.caos.shop[rv] = keep.shop; S.M.caos.ops[rv] = keep.ops; }
       OM.Physics.restore(W, cur.snap.balls);
       ev.push(msg('¡MARCHA ATRÁS! EL TIRO NO CUENTA', 'u', null, true));
       ev.push({ k: 'total', v: 0, stolen: 0, rpts: 0 });
@@ -568,12 +624,18 @@ OM.Match = (function () {
           Sc.callJ(me, 'onShot');
           // Gran Golpe
           if (M.fx.xshot[me]) { ev.push(msg('¡GRAN GOLPE!', 'v', null, true)); Sc.add({ xmult: M.fx.xshot[me] }); M.fx.xshot[me] = 0; }
+          if (Mo.fever) { ev.push(msg('¡FIEBRE!', 'c', null, true)); Sc.add({ xmult: 2 }); }
           // dinero por trucos (con tope por partida)
           const TR = OM.SHOP.trick;
           let tc = (n >= 4 ? TR.massacre : n === 3 ? TR.triple : n === 2 ? TR.double : 0)
             + (cur.hopped ? TR.hop : cur.curved ? TR.masse : 0) + (cur.kick ? TR.kick : 0) + (Sc.streak >= 2 ? TR.streak : 0);
-          tc = Math.max(0, Math.min(tc, OM.SHOP.trickCap - M.tcash[me]));
+          tc = Math.max(0, Math.min(tc, (S.caos ? OM.CAOS.trickCap : OM.SHOP.trickCap) - M.tcash[me]));
           if (tc) { M.tcash[me] += tc; Sc.add({ cash: tc, label: 'TRUCOS' }); }
+          // CAOS: cada bola da dinero (y más con Lluvia de Oro)
+          const perBall = (S.caos ? OM.CAOS.ball : 0) + (Mo.goldRain ? 2 : 0);
+          if (perBall) Sc.add({ cash: perBall * scored.length, label: Mo.goldRain ? 'LLUVIA DE ORO' : 'BOLAS' });
+          // CAOS: cada bola del que tira le da munición al que espera
+          if (S.caos && OM.CAOS.rivalBall) Sc.addRival({ cash: OM.CAOS.rivalBall * scored.length });
         }
         own.forEach((b) => Sc.callJ(rv, 'onRivalBall', b));
         P.stats.balls += own.length;
@@ -594,6 +656,8 @@ OM.Match = (function () {
     M.pts[me] += total + stolen; M.pts[rv] += Sc.rpts - stolen;
     P.stats.best = Math.max(P.stats.best, total);
     out.total = total; out.stolen = stolen; out.rpts = Sc.rpts; out.pts = Sc.pts; out.mult = Sc.mult;
+    // Bolsa del Diablo (CAOS): la blanca pasó por encima
+    if (cur.token && M.caos && M.caos.token) { M.caos.tokenAt = M.caos.token; out.bag = grabBag(S, me, ev); }
     ev.push({ k: 'total', v: total, stolen, rpts: Sc.rpts });
 
     // reposiciones
@@ -602,7 +666,7 @@ OM.Match = (function () {
     // turno
     M.shotIdx++; M.breakShot = !!(cur.timeout && isBreak); // si se acaba el tiempo en el saque, saca el rival
     if (out.win == null && M.shotIdx > 160) out.win = M.pts[me] >= M.pts[rv] ? me : rv; // tope de seguridad
-    if (out.win != null) { finishMatch(S, W, out.win, lose ? P.name + ' ' + lose.toLowerCase() : null); return out; }
+    if (out.win != null) { finishMatch(S, W, out.win, lose ? P.name + ' ' + lose.toLowerCase() : null, lose ? me : null); return out; }
     const isFoul = !!out.foul;
     let cont = !isFoul && potted;
     if (!cont && !isFoul && cur.freeShot) { cont = true; ev.splice(ev.length - 1, 0, msg('TIRO GRATIS: ¡SIGUES!', 'v')); }
@@ -613,19 +677,28 @@ OM.Match = (function () {
     out.cont = cont;
     if (potted && !isFoul) M.streak[me]++;
     else if (isFoul || !Mo.keepStreak) M.streak[me] = 0;
-    if (!cont) M.turn = rv;
+    // CAOS: la mecha. Como mucho OM.CAOS.fuse tiros seguidos; el último pasa el turno sin falta
+    if (M.caos) {
+      M.chain = (M.chain || 0) + 1;
+      if (cont && M.chain >= CA().fuse) { cont = false; out.cont = false; out.fuse = true; M.streak[me] = 0; ev.splice(ev.length - 1, 0, msg('¡SE ACABÓ LA MECHA!', 'c', null, true)); }
+    }
+    if (M.caos && cont && M.streak[me] >= CA().rally) { caosRally(S, rv); out.rally = rv; }
+    if (!cont) { if (M.caos) { out.caos = caosTurnEnd(S, W, me); M.chain = 0; } M.turn = rv; }
     // bola en mano: tras una falta el rival coloca donde quiera; si la blanca cayó sin castigo, desde cabecera
     M.inHand = isFoul ? (Mo.bribed ? (cur.scratch ? 'kitchen' : null) : 'any') : cur.scratch ? 'kitchen' : null;
     if (M.breakShot) M.inHand = 'kitchen';
     return out;
   }
 
-  function finishMatch(S, W, win, reason) {
+  // forfeit: el que metió la 8 antes de tiempo. Pierde la SERIE entera y se queda sin puntos.
+  function finishMatch(S, W, win, reason, forfeit) {
     const M = S.M, i = S.matchIdx, ls = 1 - win;
     const lines = [];
     const add = (pi, label, v) => { if (!v) return; S.players[pi].points += v; M.pts[pi] += v; lines.push({ pi, label, v }); };
+    if (forfeit != null && !S.caos) { S.forfeit = forfeit; add(forfeit, 'Pierde la serie: la 8 antes de tiempo', -S.players[forfeit].points); }
     M.winner = win; S.players[win].wins++;
-    add(win, 'Victoria', PT.win[Math.min(i, PT.win.length - 1)]);
+    if (S.caos) { S.lastLoser = ls; S.done = true; M.end = { lines, reason: reason || null }; return; } // sin puntos: gana quien gana la partida
+    add(win, 'Victoria', S.caos ? OM.CAOS.win : PT.win[Math.min(i, PT.win.length - 1)]);
     if (M.mode === '8' && !M.open) {
       const left = remaining(S, W, ls).length;
       add(win, 'Paliza: ' + left + (left === 1 ? ' bola' : ' bolas') + ' del rival', left * PT.leftover);
@@ -638,11 +711,17 @@ OM.Match = (function () {
       if (d && d.onMatchEnd) add(pi, OM.jokerDef(inst.id).name, d.onMatchEnd.call({ st: J.st, inst: J, def: d }, S, J, pi === win) || 0);
     }));
     S.lastLoser = ls;
+    if (forfeit != null || i >= S.n - 1) {
+      S.done = true;
+      // el dinero que sobra al final da puntos
+      S.players.forEach((P, pi) => { if (pi !== S.forfeit && P.money > 0) add(pi, 'Dinero sobrante: $' + P.money, P.money * PT.cash); });
+    }
     M.end = { lines, reason: reason || null };
-    if (i >= S.n - 1) S.done = true;
   }
   // ganador de la serie: más puntos; si empatan, más partidas; si no, el de la última
   function seriesWinner(S) {
+    if (S.caos && S.M && S.M.winner != null) return S.M.winner;
+    if (S.forfeit != null) return 1 - S.forfeit;
     const [a, b] = S.players;
     if (a.points !== b.points) return a.points > b.points ? 0 : 1;
     if (a.wins !== b.wins) return a.wins > b.wins ? 0 : 1;
@@ -651,11 +730,13 @@ OM.Match = (function () {
 
   // ---------------- comodines activos ----------------
   // Se usan en tu turno, antes de tirar, y desaparecen de la fila.
+  // En el CAOS los activos `anytime` (trampas) también se usan en el turno del rival.
   function canUse(S, pi, idx) {
     const M = S.M, J = S.players[pi].jokers[idx];
-    if (!M || !J || M.turn !== pi || M.breakShot || M.winner != null) return false;
+    if (!M || !J || M.breakShot || M.winner != null) return false;
     const d = OM.jokerDef(J.id), fx = M.fx;
     if (!d.active) return false;
+    if (M.turn !== pi && !(S.caos && d.anytime)) return false;
     switch (d.active) {
       case 'bomb': return !fx.bomb;
       case 'rewind': return !fx.rewind;
@@ -664,14 +745,17 @@ OM.Match = (function () {
       case 'hex': return fx.hex !== 1 - pi;
       case 'xshot': return !fx.xshot[pi];
       case 'heist': return S.players[1 - pi].points > 0;
+      case 'rush': return fx.rush !== 1 - pi;
+      case 'shrink': return fx.shrink !== 1 - pi;
+      case 'pickpocket': return S.players[1 - pi].money > 0;
     }
     return true;
   }
-  // Devuelve {kind, name, v?} si se pudo usar (y lo quita de la fila), o null.
-  function useActive(S, pi, idx) {
+  // Devuelve {kind, name, v?} si se pudo usar (y lo quita de la fila), o null. W hace falta para el Tornado.
+  function useActive(S, pi, idx, W) {
     if (!canUse(S, pi, idx)) return null;
     const M = S.M, fx = M.fx, P = S.players[pi], J = P.jokers[idx], d = OM.jokerDef(J.id);
-    const res = { kind: d.active, name: d.name, uid: J.uid };
+    const res = { kind: d.active, name: d.name, uid: J.uid, id: J.id };
     P.jokers.splice(idx, 1);
     switch (d.active) {
       case 'bomb': fx.bomb = true; break;
@@ -686,8 +770,181 @@ OM.Match = (function () {
         R.points -= v; P.points += v; M.pts[pi] += v; M.pts[1 - pi] -= v; res.v = v;
         break;
       }
+      case 'rush': fx.rush = 1 - pi; break;
+      case 'shrink': fx.shrink = 1 - pi; break;
+      case 'pickpocket': { const R = S.players[1 - pi], v = Math.min(6, R.money); R.money -= v; P.money += v; P.stats.earned += v; res.v = v; break; }
+      case 'tornado': if (W) tornado(S, W); break;
     }
     return res;
+  }
+  // Tornado: todas las bolas menos la blanca a sitios al azar (de la semilla)
+  function tornado(S, W) {
+    const M = S.M; M.tornados = (M.tornados || 0) + 1;
+    const rng = OM.RNG(mix(S.seed, 6000 + M.shotIdx * 13 + M.tornados));
+    W.balls.forEach((b) => {
+      if (!b.alive || b.num === 0) return;
+      for (let k = 0; k < 200; k++) {
+        const x = F.x + 14 + rng() * (F.w - 28), y = F.y + 14 + rng() * (F.h - 28);
+        if (W.pockets.some((p) => Math.hypot(p.x - x, p.y - y) < p.mouth + b.r + 4)) continue;
+        if (!OM.Physics.freeSpot(W, x, y, b.r + 1, b)) continue;
+        b.x = Math.round(x * 10) / 10; b.y = Math.round(y * 10) / 10; b.vx = b.vy = 0; b.z = 0; b.vz = 0; b.curve = 0;
+        break;
+      }
+    });
+  }
+
+  // ---------------- MODO CAOS ----------------
+  const CA = () => OM.CAOS;
+  // a quién afecta un hechizo: a su dueño (mods / once) o al rival (trastadas)
+  function spellTarget(owner, d) { return d.rival ? 1 - owner : owner; }
+  // condición de mesa nº n (de la semilla). Desde el turno CA().double salen dos a la vez (de grupos distintos)
+  function caosCond(S, n, avoid) {
+    const rng = OM.RNG(mix(S.seed, 7000 + n));
+    const pool = rng.shuffle(OM.OBSTACLES.filter((o) => !o.pts).map((o) => o.id).filter((id) => !avoid.includes(id)));
+    const out = [pool[0]];
+    if (n * CA().every >= CA().double) {
+      const a = OM.obstacleDef(pool[0]);
+      const b = pool.slice(1).find((id) => { const d = OM.obstacleDef(id); return !(d.grp && d.grp === a.grp); });
+      if (b) out.push(b);
+    }
+    return out;
+  }
+  function spawnToken(S, W, n) {
+    const rng = OM.RNG(mix(S.seed, 8000 + n));
+    for (let k = 0; k < 80; k++) {
+      const x = Math.round(F.x + 40 + rng() * (F.w - 80)), y = Math.round(F.y + 24 + rng() * (F.h - 48));
+      if (!OM.Physics.freeSpot(W, x, y, 12)) continue;
+      if (W.pockets.some((p) => Math.hypot(p.x - x, p.y - y) < p.mouth + 16)) continue;
+      return { x, y, r: 5 };
+    }
+    return null;
+  }
+  // se cogió la Bolsa del Diablo: +$ y un activo al azar si tiene el hueco libre
+  function grabBag(S, pi, ev) {
+    const M = S.M, P = S.players[pi], B = CA().bag;
+    M.caos.token = null;
+    P.money += B.cash; P.stats.earned += B.cash;
+    ev.push({ k: 'cash', v: B.cash, label: 'BOLSA', src: { type: 'ball', x: M.caos.tokenAt ? M.caos.tokenAt.x : MID.x, y: M.caos.tokenAt ? M.caos.tokenAt.y : MID.y } });
+    return { pi, cash: B.cash };
+  }
+  // termina el turno de `me` (en el CAOS): se acaban sus hechizos, se abre su tienda y la mesa cambia cada CA().every turnos
+  function caosTurnEnd(S, W, me) {
+    const M = S.M, C = M.caos, info = { expired: [], pay: 0, payTo: me, cond: false };
+    S.players.forEach((Pl, pi) => {
+      Pl.jokers = Pl.jokers.filter((J) => {
+        const d = OM.jokerDef(J.id);
+        if (OM.jtype(d) !== 'hechizo' || !J.live || spellTarget(pi, d) !== me) return true;
+        info.expired.push({ pi, id: J.id }); return false;
+      });
+    });
+    info.pay = caosWindow(S, me, true, W);
+    C.turns++;
+    if (C.turns % CA().every === 0) {
+      C.n++; M.obstacles = C.next; C.next = caosCond(S, C.n + 1, M.obstacles);
+      C.token = spawnToken(S, W, C.n) || C.token;
+      info.cond = true;
+    }
+    return info;
+  }
+  // abre la tienda de pi (nuevas cartas). pay: cobra la paga de la ventana. Devuelve lo cobrado.
+  // ¿va perdiendo en la mesa? (bola 8 con grupos: le quedan más bolas que al rival)
+  function caosBehind(S, W, pi) { const M = S.M; return !!W && M.mode === '8' && !M.open && remaining(S, W, pi).length > remaining(S, W, 1 - pi).length; }
+  function caosWindow(S, pi, pay, W) {
+    const C = S.M.caos, sh = C.shop[pi], P = S.players[pi];
+    sh.win++; sh.roll = 0; sh.paid = 0; sh.got = {}; sh.rally = false; sh.offers = caosOffers(S, pi);
+    if (!pay) return 0;
+    const v = CA().window + (caosBehind(S, W, pi) ? CA().behind : 0);
+    P.money += v; P.stats.earned += v;
+    return v;
+  }
+  // ¿la carta cae sobre el rival en cuanto se compra? (trastada o trampa) Si no, es para tu próximo turno.
+  const isTrap = (d) => (OM.jtype(d) === 'hechizo' ? !!d.rival : !!d.anytime);
+  const caosOk = (S, d) => { const t = OM.jtype(d); return (t === 'hechizo' || t === 'activo') && !d.pts && d.active !== 'quake' && !(d.only8 && S.mode === '9'); };
+  // 5 cartas: trastada, trampa, hechizo propio, activo propio y una al azar (la rareza sube con los turnos).
+  // rally: el rival lleva una tacada larga -> 5 trampas (hechizos contra él y activos que se usan ya)
+  function caosOffers(S, pi, rally) {
+    const sh = S.M.caos.shop[pi], i = Math.min(4, Math.floor(sh.win / 3));
+    const rng = OM.RNG(mix(mix(S.seed, 7777 + sh.win), pi * 977 + sh.roll * 31 + 5));
+    const w = { comun: 60, raro: 30 + 4 * i, epico: 8 + 4 * i, legendario: 2 + 2 * i }, taken = new Set();
+    const pick = (f) => {
+      const pool = OM.JOKERS.filter((d) => caosOk(S, d) && f(d) && !taken.has(d.id));
+      let r = rng() * pool.reduce((a, d) => a + w[d.rarity], 0);
+      const d = pool.find((x) => (r -= w[x.rarity]) < 0) || pool[0];
+      if (d) taken.add(d.id);
+      return d ? { id: d.id, sold: false } : null;
+    };
+    const H_ = (d) => OM.jtype(d) === 'hechizo', A_ = (d) => OM.jtype(d) === 'activo';
+    const fs = rally ? [(d) => isTrap(d) && H_(d), (d) => isTrap(d) && A_(d), (d) => isTrap(d) && H_(d), (d) => isTrap(d) && A_(d), isTrap]
+      : [(d) => isTrap(d) && H_(d), (d) => isTrap(d) && A_(d), (d) => !isTrap(d) && H_(d), (d) => !isTrap(d) && A_(d), () => true];
+    return fs.map(pick).filter(Boolean);
+  }
+  // tacada larga del que tira: la tienda del que espera se llena de trampas y vuelve a dejar comprar
+  function caosRally(S, pi) {
+    const sh = S.M.caos.shop[pi];
+    sh.win++; sh.got = {}; sh.rally = true; sh.offers = caosOffers(S, pi, true);
+  }
+  function caosPrice(S, id) {
+    const d = OM.jokerDef(id); let p = CA().price[OM.jtype(d)][d.rarity];
+    if (hasObs(S, 'rebajas')) p = Math.max(1, Math.ceil(p / 2));
+    return p;
+  }
+  const caosOpen = (S, pi) => !!(S.M && S.M.caos && S.M.turn !== pi && S.M.winner == null);
+  // ¿se puede comprar la oferta k ahora? Devuelve el motivo o null.
+  function caosCanBuy(S, pi, k) {
+    const sh = S.M.caos.shop[pi], o = sh.offers[k], P = S.players[pi];
+    if (!caosOpen(S, pi)) return 'Tu tienda abre en el turno del rival';
+    if (!o || o.sold) return 'Ya está vendida';
+    if (sh.got[OM.jtype(OM.jokerDef(o.id))]) return 'Ya compraste uno de este tipo';
+    if (P.money < caosPrice(S, o.id)) return 'No te alcanza';
+    const d = OM.jokerDef(o.id);
+    if (d.anytime) { // la trampa tiene que poder usarse ya
+      const fx = S.M.fx, rv = 1 - pi;
+      if ((d.active === 'hex' && fx.hex === rv) || (d.active === 'rush' && fx.rush === rv) || (d.active === 'shrink' && fx.shrink === rv)) return 'Ya está puesta';
+      if (d.active === 'pickpocket' && !S.players[rv].money) return 'No tiene dinero';
+      if (d.active === 'heist' && !S.players[rv].points) return 'No tiene puntos';
+      if (S.M.breakShot) return 'Espera al saque';
+    }
+    return null;
+  }
+  // Comprar = lanzar. Trastadas y trampas: al rival, ya. Lo tuyo: se dispara al empezar tu turno.
+  // Devuelve {J, id, cost, mode:'now'|'next', used (resultado del activo)} o {err}.
+  function caosBuy(S, pi, k, W) {
+    const err = caosCanBuy(S, pi, k);
+    if (err) return { err };
+    const sh = S.M.caos.shop[pi], o = sh.offers[k], P = S.players[pi], d = OM.jokerDef(o.id), cost = caosPrice(S, o.id);
+    P.money -= cost; P.stats.spent += cost; o.sold = true; sh.got[OM.jtype(d)] = true;
+    const res = { id: o.id, cost, k, mode: isTrap(d) ? 'now' : 'next' };
+    if (OM.jtype(d) === 'hechizo') {
+      P.jokers = P.jokers.filter((J) => J.id !== o.id);
+      res.J = give(S, pi, o.id);
+    } else if (d.anytime) {
+      res.J = give(S, pi, o.id);
+      res.used = useActive(S, pi, P.jokers.indexOf(res.J), W);
+    } else { res.J = give(S, pi, o.id); res.J.queued = true; }
+    return res;
+  }
+  // Al empezar el turno de alguien en el CAOS: se disparan sus activos cargados. Una vez por turno (los dos clientes igual).
+  function caosTurnStart(S, W) {
+    const M = S.M, C = M.caos;
+    if (!C || C.startedAt === C.turns || M.breakShot || M.winner != null) return null;
+    C.startedAt = C.turns;
+    const pi = M.turn, P = S.players[pi], fired = [];
+    for (let g = 0; g < 6; g++) {
+      const idx = P.jokers.findIndex((J) => OM.jtype(OM.jokerDef(J.id)) === 'activo');
+      if (idx < 0) break;
+      const r = useActive(S, pi, idx, W);
+      if (r) fired.push(r); else P.jokers.splice(idx, 1);
+    }
+    return fired;
+  }
+  // Acción de tienda fuera de turno: op = {pi, n, a:'buy', k}. n = nº de orden de las acciones de ese jugador:
+  // se aplica solo si es la siguiente (así el online la aplica una vez y en orden). Devuelve el resultado o null si ya estaba.
+  function caosOp(S, op, W) {
+    const C = S.M && S.M.caos;
+    if (!C || op.n !== C.ops[op.pi]) return null;
+    C.ops[op.pi]++;
+    if (op.a === 'buy') return caosBuy(S, op.pi, op.k, W);
+    return { err: '?' };
   }
   // tiro que no llegó a hacerse: se acabó el tiempo (cuenta como falta)
   function timeoutCur(S, W) {
@@ -713,10 +970,10 @@ OM.Match = (function () {
 
   // ---------------- sincronización (online) ----------------
   function serialize(S) {
-    return { matchIdx: S.matchIdx, lastLoser: S.lastLoser, done: S.done, M: S.M, players: S.players.map((P) => ({ jokers: P.jokers, points: P.points, wins: P.wins, money: P.money, uidN: P.uidN, stats: P.stats })) };
+    return { matchIdx: S.matchIdx, lastLoser: S.lastLoser, done: S.done, forfeit: S.forfeit, M: S.M, players: S.players.map((P) => ({ jokers: P.jokers, points: P.points, wins: P.wins, money: P.money, uidN: P.uidN, stats: P.stats })) };
   }
   function applySync(S, d) {
-    S.matchIdx = d.matchIdx; S.lastLoser = d.lastLoser; S.done = d.done; S.M = d.M;
+    S.matchIdx = d.matchIdx; S.lastLoser = d.lastLoser; S.done = d.done; S.forfeit = d.forfeit; S.M = d.M;
     d.players.forEach((p, i) => Object.assign(S.players[i], JSON.parse(JSON.stringify(p))));
   }
 
@@ -725,5 +982,6 @@ OM.Match = (function () {
     price, sellPrice, behind, openShop, rerollCost, reroll, displaced, buy, sell, payday, shopState, applyShopState,
     buildWorld, rack, applyTurn, shotSpeed, cueBall, onTable, remaining, legalFirst, goal, beginShot, track, resolve, respot,
     seriesWinner, canUse, useActive, freeCur, timeoutCur, resolveQuake, serialize, applySync,
+    applyCond, spellTarget, caosOpen, caosPrice, caosBuy, caosCanBuy, caosOp, caosCond, caosTurnStart, isTrap,
   };
 })();

@@ -8,7 +8,7 @@
 window.OM = window.OM || {};
 
 OM.NET = (function () {
-  const PREFIX = 'ocho-pool-v31c-'; // cambia con cada versión incompatible del protocolo (v31c: chat)
+  const PREFIX = 'ocho-pool-v33-'; // cambia con cada versión incompatible del protocolo (v32: modo CAOS)
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const TIMEOUT = 20; // s sin noticias del rival = desconectado
   const N = {

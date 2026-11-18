@@ -7,6 +7,7 @@ OM.SCENES = OM.SCENES || {};
   const L = OM.LAYOUT, F = L.felt, MT = OM.Match, PH = OM.Physics;
   const PCOL = ['q', 'v'];
   const MID = { x: F.x + F.w / 2, y: F.y + F.h / 2 };
+  const FUSE = { x: F.x + 24, y: L.table.y + 7 }; // mecha del CAOS, sobre la banda de arriba
   let T = null; // estado de la mesa
 
   const S_ = () => OM.S;
@@ -21,11 +22,13 @@ OM.SCENES = OM.SCENES || {};
       const S = S_();
       MT.startMatch(S);
       T = {
-        W: MT.buildWorld(S), phase: 'intro', intro: 3.2, angle: 0, power: 0, charging: false, strike: 0, strikePow: 0,
+        W: MT.buildWorld(S), phase: 'intro', intro: S.caos ? 7 : 3.2, introMax: S.caos ? 7 : 3.2, angle: 0, power: 0, charging: false, strike: 0, strikePow: 0,
         spin: { f: 0, s: 0 }, elev: 0, cur: null, out: null, play: null, shooter: S.M.turn, turnShown: S.M.turn,
         shown: [S.players[0].points, S.players[1].points], pts: 0, mult: 1, multStr: '1', shotName: '', shotColor: '7', bump: { c: 0, m: 0 },
         paused: false, help: false, lastHit: 0, glow: null, bot: null, clock: 15, aimSend: 0, syncBuf: null, after: null,
         end: null, mods: MT.mods(S, S.M.turn), guideKey: '', guide: null, bumpFx: {}, banner: null, leaving: false, t0: OM.time,
+        // MODO CAOS: tienda desplegable, acciones propias aún sin confirmar (online), bot que compra fuera de turno, aviso de mesa nueva
+        caos: S.caos ? { open: false, pending: [], note: null, botT: 3, cond: null, fly: [], tray: {}, closeT: 0, hov: null } : null,
       };
       OM.FX.clear(); OM.HUD.sel = null;
       OM.music(S.M.obstacles.length ? 'boss' : 'table');
@@ -49,7 +52,7 @@ OM.SCENES = OM.SCENES || {};
       }
       if (T.phase === 'intro') {
         T.intro -= dt;
-        if (T.intro <= 0 || (T.intro < 2.6 && (IN.kp.Enter || IN.kp.Space || (IN.released && !IN.consumed)))) { IN.consumed = true; beginTurn(); }
+        if (T.intro <= 0 || (T.intro < T.introMax - 0.6 && (IN.kp.Enter || IN.kp.Space || (IN.released && !IN.consumed)))) { IN.consumed = true; beginTurn(); }
       } else if (T.phase === 'place') { if (!block || ctl() !== 'human') updatePlace(dt); }
       else if (T.phase === 'aim') { if (!block || ctl() !== 'human') updateAim(dt); }
       else if (T.phase === 'strike') { T.strike -= dt; if (T.strike <= 0) doShoot(); }
@@ -57,6 +60,7 @@ OM.SCENES = OM.SCENES || {};
       else if (T.phase === 'scoring') updateScoring(dt);
       else if (T.phase === 'wait') { if (T.syncBuf) settle(); }
       tickClock(dt);
+      if (T.caos) updateCaos(dt);
       if (T.phase !== 'rolling' && T.phase !== 'quake') PH.step(W, dt); // animaciones de caída
     },
     draw(ctx, t) { drawTable(ctx, t); },
@@ -69,6 +73,7 @@ OM.SCENES = OM.SCENES || {};
     while (box.length) {
       const m = box[0];
       if (m.t === 'sync') { box.shift(); T.syncBuf = m; continue; }
+      if (m.t === 'cop') { box.shift(); caosRemote(m.op); continue; } // CAOS: el rival compra en mi turno
       if (m.t === 'aim') {
         box.shift();
         if (idle() && ctl() === 'remote') {
@@ -99,6 +104,12 @@ OM.SCENES = OM.SCENES || {};
     if (online() && S.players[T.shooter].kind === 'remote') {
       if (!T.syncBuf) { T.phase = 'wait'; return; }
       MT.applySync(S, T.syncBuf.s); PH.restore(T.W, T.syncBuf.balls); T.syncBuf = null;
+      // CAOS: mis compras que el rival aún no había recibido se vuelven a aplicar encima de su estado
+      if (T.caos && S.M.caos) {
+        const C = S.M.caos;
+        T.caos.pending = T.caos.pending.filter((op) => op.n >= C.ops[op.pi]);
+        T.caos.pending.forEach((op) => MT.caosOp(S, op, T.W));
+      }
     }
     const fn = T.after; T.after = null; fn();
   }
@@ -106,6 +117,7 @@ OM.SCENES = OM.SCENES || {};
   // ---------------- turno ----------------
   function beginTurn() {
     const S = S_(), M = S.M, W = T.W;
+    const fired = T.caos ? MT.caosTurnStart(S, W) : null; // CAOS: lo que compraste para tu turno se dispara ahora
     T.mods = MT.applyTurn(S, W);
     const changed = T.turnShown !== M.turn;
     T.turnShown = M.turn; T.shooter = M.turn;
@@ -126,12 +138,15 @@ OM.SCENES = OM.SCENES || {};
     const tg = T.W.balls.filter((b) => b.alive && b.num !== 0 && MT.legalFirst(S, W, b.num)).sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
     if (tg) T.angle = Math.atan2(tg.y - c.y, tg.x - c.x);
     T.aimKey = true; T.lastMouse = { x: OM.IN.mx, y: OM.IN.my };
-    T.bot = ctl() === 'bot' ? { t: 0.7 + Math.random() * 0.6, plan: null, stage: 'think' } : null;
+    T.bot = ctl() === 'bot' ? { t: (S.caos ? 1.6 : 0.7) + Math.random() * 0.6, plan: null, stage: 'think' } : null; // en el CAOS piensa más: deja comprar al rival
     if (changed) {
       const P = S.players[M.turn];
       T.banner = { text: 'TURNO DE ' + P.name.toUpperCase(), color: PCOL[M.turn], t: 1.3 };
       OM.sfx('card_flip');
+      // CAOS: la tienda se abre sola en el turno del rival (salvo 2 jugadores en el mismo dispositivo) y se cierra en el tuyo
     }
+    if (fired) fired.forEach((r, i) => flyCard(r.id, { x: L.jokers.x + 60, y: L.jokers.y }, trayPos(), false, () => useFx(r, M.turn, null), i * 0.25));
+    if (T.caos && (changed || !T.caos.started)) { T.caos.started = true; const sp = caosShopper(); T.caos.open = sp >= 0 && !caosLocal2(); if (sp >= 0) OM.sfx('pack_open', { vol: 0.5 }); }
   }
 
   // ---------------- acciones (las produce el jugador local, el bot o la red) ----------------
@@ -149,14 +164,19 @@ OM.SCENES = OM.SCENES || {};
   function actJoker(idx) {
     const S = S_(), me = S.M.turn, J = S.players[me].jokers[idx];
     const pos = J && OM.HUD.jokerPos(S, J.uid, T.turnShown);
-    const r = MT.useActive(S, me, idx);
+    const r = MT.useActive(S, me, idx, T.W);
     if (!r) return;
-    const kind = r.kind;
+    useFx(r, me, pos);
+    if (T.bot) T.bot = { t: 0.9, plan: null, stage: 'think' };
+  }
+  // efectos de un activo usado por `me` (en su turno o, en el CAOS, en el del rival)
+  function useFx(r, me, pos) {
+    const S = S_(), kind = r.kind;
     OM.sfx('pack_open');
     if (pos) OM.FX.burst(pos.x, pos.y - 30, 'gold', 16);
     OM.FX.popText(MID.x, MID.y - 30, r.name.toUpperCase() + '!', 'u', { size: 2 });
     const say = (txt, col) => OM.FX.popText(MID.x, MID.y - 8, txt, col || 'v');
-    if (kind === 'hand') { T.phase = 'place'; }
+    if (kind === 'hand') { if (S.M.inHand) T.phase = 'place'; }
     else if (kind === 'bomb') say('PRÓXIMO TIRO: EXPLOSIVO');
     else if (kind === 'free') say('SI FALLAS, SIGUES TIRANDO');
     else if (kind === 'xshot') say('PRÓXIMO TIRO QUE EMBOQUE: x3 COMBO', 'c');
@@ -171,8 +191,23 @@ OM.SCENES = OM.SCENES || {};
       PH.quake(T.W, 260);
       T.cur = MT.freeCur(); T.phase = 'quake';
       OM.FX.shake(6, 0.7); OM.FX.flash('v', 0.25, 0.3); OM.sfx('explosion');
+    } else if (kind === 'rush') { say('PRÓXIMO TIRO DEL RIVAL: 8 SEGUNDOS', 'c'); OM.sfx('curse'); }
+    else if (kind === 'shrink') { say('PRÓXIMO TIRO DEL RIVAL: TRONERAS CHICAS', 'c'); OM.sfx('curse'); OM.FX.flash('a', 0.15, 0.25); }
+    else if (kind === 'pickpocket') {
+      const b = boxPos(1 - me), a = boxPos(me);
+      OM.FX.popText(b.x, b.y + 12, '-$' + r.v, 'c', { size: 2 }); OM.FX.popText(a.x, a.y + 12, '+$' + r.v, 'i', { size: 2 });
+      say('¡LE ROBA $' + r.v + '!', 'i'); OM.sfx('coin'); OM.FX.shake(2, 0.2);
+    } else if (kind === 'tornado') {
+      T.W.balls.forEach((b) => { if (b.alive && b.num !== 0) OM.FX.burst(b.x, b.y, 'smoke', 8); });
+      say('¡TODO POR LOS AIRES!', 'u'); OM.FX.shake(7, 0.6); OM.FX.flash('u', 0.25, 0.35); OM.sfx('explosion');
     }
-    if (T.bot) T.bot = { t: 0.9, plan: null, stage: 'think' };
+    refreshMods();
+  }
+  // vuelve a calcular los mandos del que tira si algo cambió a mitad de su turno (CAOS: compras del rival)
+  function refreshMods() {
+    if (!T || !idle()) return;
+    T.mods = MT.applyTurn(S_(), T.W); T.guideKey = '';
+    T.clock = Math.min(T.clock, clockMax());
   }
 
   // ---------------- colocar blanca ----------------
@@ -191,7 +226,7 @@ OM.SCENES = OM.SCENES || {};
     }
     if (kind !== 'human') return;
     const x = Math.min(Math.max(IN.mx, F.x + c.r), maxX), y = Math.min(Math.max(IN.my, F.y + c.r), F.y + F.h - c.r);
-    if (OM.G.inside(L.table.x, L.table.y, L.table.w, L.table.h) && !OM.CHAT.over()) {
+    if (OM.G.inside(L.table.x, L.table.y, L.table.w, L.table.h) && !OM.CHAT.over() && !caosOver()) {
       if (PH.freeSpot(T.W, x, y, c.r, c)) { c.x = x; c.y = y; }
       OM.G.cursor = 'grab';
       if (IN.released && !IN.consumed && PH.freeSpot(T.W, c.x, c.y, c.r, c)) { IN.consumed = true; send({ t: 'place', x: c.x, y: c.y }); actPlace(c.x, c.y); return; }
@@ -284,7 +319,7 @@ OM.SCENES = OM.SCENES || {};
   }
 
   // ---------------- apuntar ----------------
-  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.my < L.bottom.y - 2 && IN.mx > 186 && !OM.CHAT.over(); }
+  function inPlayArea() { const IN = OM.IN; return IN.my > 66 && IN.my < L.bottom.y - 2 && IN.mx > 186 && !OM.CHAT.over() && !caosOver(); }
   const shakeOff = () => (T.mods.shake && ctl() !== 'remote' ? (Math.sin(OM.time * 7.3) * 0.03 + Math.sin(OM.time * 13.1) * 0.014) * T.mods.shake : 0);
   const aimAngle = () => T.angle + (T.phase === 'aim' ? shakeOff() : 0);
 
@@ -434,6 +469,8 @@ OM.SCENES = OM.SCENES || {};
           OM.FX.burst(e.x, e.y, b.kind === 'oro' || fin ? 'gold' : 'ember', fin ? 16 : 6);
           if (n > 1) OM.FX.shake(1 + n, 0.15);
         }
+      } else if (e.type === 'token') {
+        OM.FX.burst(e.x, e.y, 'gold', 24); OM.FX.popText(e.x, e.y - 12, '¡BOLSA DEL DIABLO!', 'i'); OM.sfx('coin', { pitch: 1.4 }); OM.FX.shake(2, 0.15);
       } else if (e.type === 'ghostBounce') {
         OM.FX.burst(e.x, e.y, 'smoke', 10); OM.sfx('curse', { vol: 0.4 });
       }
@@ -456,6 +493,8 @@ OM.SCENES = OM.SCENES || {};
     T.shooter = S.M.turn;
     T.out = MT.resolve(S, T.W, T.cur); // muta S: puntos, grupos, turno
     sendSync();
+    // el CAOS no va de puntos: solo se animan los avisos, el dinero y el nombre del tiro
+    if (S.caos) T.out.events = T.out.events.filter((e) => e.k === 'msg' || e.k === 'cash' || e.k === 'rcash' || e.k === 'type');
     T.play = { i: 0, timer: 0.25, events: T.out.events, done: false };
     T.pts = 0; T.mult = 1; T.multStr = '1'; T.shotName = ''; T.shotColor = '7';
     T.phase = 'scoring';
@@ -537,6 +576,14 @@ OM.SCENES = OM.SCENES || {};
     if (out.foul) OM.CHAT.event('foul', T.shooter);
     else if (out.total >= 600 || out.events.some((e) => e.k === 'type' && e.n >= 2)) OM.CHAT.event('big', T.shooter);
     if (S.M.winner != null) { endMatch(); return; }
+    if (out.caos) caosTurnFx(out.caos);
+    if (out.fuse) { OM.FX.burst(FUSE.x + OM.CAOS.fuse * 24 + 5, FUSE.y + 2, 'ember', 30); OM.FX.flash('c', 0.25, 0.3); OM.sfx('curse', { pitch: 0.8 }); }
+    if (out.rally != null && T.caos) {
+      // tacada larga: la tienda del que espera se recarga de trampas
+      OM.FX.flash('a', 0.2, 0.3); OM.sfx('curse', { pitch: 1.3 });
+      OM.FX.burst(CONSUM_C.x, CONSUM_C.y + 20, 'ember', 20);
+      if (caosShopper() === out.rally && !caosLocal2()) { T.caos.open = true; T.caos.closeT = 0; }
+    }
     if (out.foul && S.M.inHand === 'any') OM.FX.popText(MID.x, MID.y + 40, 'BOLA EN MANO PARA ' + S.players[S.M.turn].name.toUpperCase(), PCOL[S.M.turn], { size: 2 });
     else if (out.cont && S.M.streak[S.M.turn] >= 2) OM.FX.popText(MID.x, MID.y + 36, '¡SIGUE! TACADA x' + (S.M.streak[S.M.turn] + 1), 'v');
     beginTurn();
@@ -562,8 +609,10 @@ OM.SCENES = OM.SCENES || {};
   }
 
   // ---------------- dibujo ----------------
+  // Espejismo: la guía del que lo sufre sale torcida (hacia un lado distinto en cada tiro)
+  const lieOff = () => (T.mods.lie ? T.mods.lie * (S_().M.shotIdx % 2 ? 1 : -1) : 0);
   function guide() {
-    const S = S_(), c = cueBall(), m = T.mods, ang = aimAngle();
+    const S = S_(), c = cueBall(), m = T.mods, ang = aimAngle() + lieOff();
     const pw = T.phase === 'strike' ? T.strikePow : T.charging ? Math.max(0.12, T.power) : 0.6;
     const g = m.guide;
     const key = [ang.toFixed(4), pw.toFixed(2), T.spin.f, T.spin.s, T.elev, c.x.toFixed(1), c.y.toFixed(1), T.W.shots, g].join('|');
@@ -622,6 +671,7 @@ OM.SCENES = OM.SCENES || {};
     OM.TABLE.drawTable(ctx, theme, t, { sealedSides: W.sealedSides, pocketScale: Math.round((W.pockets[0].r / L.pocketR) * 20) / 20 });
     if (T.glow) { T.glow.t -= 1 / 60; if (T.glow.t > 0) OM.TABLE.drawPocketGlow(ctx, T.glow.p, t, T.glow.color); else T.glow = null; }
     drawObstacles(ctx, t);
+    if (W.tokens && T.phase !== 'end') W.tokens.forEach((k) => drawBag(ctx, k, t));
     // línea de cabecera cuando hay que colocar detrás
     if (T.phase === 'place' && M.inHand === 'kitchen') {
       ctx.globalAlpha = 0.5 + Math.sin(t * 6) * 0.2; ctx.fillStyle = OM.PAL['7'];
@@ -675,7 +725,7 @@ OM.SCENES = OM.SCENES || {};
       const lift = 1 - T.elev * 0.45; // el taco elevado se ve más corto
       OM.TABLE.drawCue(ctx, S.players[M.turn].cue, c.x - Math.cos(ang) * (c.r + 1), c.y - Math.sin(ang) * (c.r + 1) - T.elev * 5, ang, pull * lift, t);
     }
-    if (MT.hasObs(S, 'niebla') && c && T.phase !== 'end' && T.phase !== 'intro') OM.TABLE.drawFog(ctx, c.x, c.y, 66, t);
+    if ((MT.hasObs(S, 'niebla') || T.mods.fog) && c && T.phase !== 'end' && T.phase !== 'intro') OM.TABLE.drawFog(ctx, c.x, c.y, 66, t);
     OM.FX.draw(ctx);
     ctx.restore();
 
@@ -685,8 +735,9 @@ OM.SCENES = OM.SCENES || {};
     if (T.phase !== 'end' && T.phase !== 'intro') {
       lines.push({ text: (idle() || T.phase === 'strike' ? 'TIRA ' : '') + P.name.toUpperCase() + (idle() ? ': ' + MT.goal(S, W) : ''), color: PCOL[me] });
       const st = M.streak[M.turn];
-      const fx = M.fx, arm = [fx.bomb && 'DINAMITA', fx.rewind && 'MARCHA ATRÁS', fx.free && 'TIRO GRATIS', fx.boost === M.turn && 'BOCA DEL INFIERNO', fx.xshot[M.turn] && 'GRAN GOLPE', fx.hex === M.turn && 'VUDÚ'].filter(Boolean);
-      lines.push(arm.length ? { text: arm.join(' + '), color: fx.hex === M.turn ? 'c' : 'v' } : st > 0 && idle() ? { text: 'TACADA x' + (st + 1) + ' · +' + Math.min(OM.POINTS.streakCap, st) + ' Combo', color: 'v' } : null);
+      const fx = M.fx, arm = [fx.bomb && 'DINAMITA', fx.rewind && 'MARCHA ATRÁS', fx.free && 'TIRO GRATIS', fx.boost === M.turn && 'BOCA DEL INFIERNO', fx.xshot[M.turn] && 'GRAN GOLPE', fx.hex === M.turn && 'VUDÚ', fx.rush === M.turn && 'RELOJ DE ARENA', fx.shrink === M.turn && 'SABOTAJE'].filter(Boolean);
+      const cursed = fx.hex === M.turn || fx.rush === M.turn || fx.shrink === M.turn;
+      lines.push(arm.length ? { text: arm.join(' + '), color: cursed ? 'c' : 'v' } : st > 0 && idle() ? { text: 'TACADA x' + (st + 1) + ' · +' + Math.min(OM.POINTS.streakCap, st) + ' Combo', color: 'v' } : null);
       if (M.mode === '8') lines.push(M.inHand && idle() ? { text: 'BOLA EN MANO', color: 'm' } : null);
       if (online()) lines.push({ text: OM.NET.peer ? 'ONLINE · sala ' + OM.NET.code : 'RIVAL DESCONECTADO', color: OM.NET.peer ? '5' : 'c' });
       else if (ctl() === 'bot' && idle()) lines.push({ text: 'el bot está pensando...', color: '5' });
@@ -738,6 +789,7 @@ OM.SCENES = OM.SCENES || {};
       OM.FONT.draw(ctx, T.banner.text, MID.x, MID.y - 58, { color: T.banner.color, size: 2, align: 'center', shadow: '0' });
       ctx.globalAlpha = 1;
     }
+    if (T.caos) drawCaos(ctx, t);
     if (T.phase === 'intro') drawIntro(ctx, t);
     if (T.phase === 'end') drawEnd(ctx, t);
     OM.CHAT.draw(ctx, T.paused || T.help || (online() && !!OM.NET.error));
@@ -748,6 +800,7 @@ OM.SCENES = OM.SCENES || {};
 
   function drawIntro(ctx, t) {
     const S = S_(), M = S.M, obs = M.obstacles;
+    if (S.caos) return drawCaosIntro(ctx, t);
     const a = Math.min(1, T.intro * 2);
     ctx.globalAlpha = a;
     const bw = 340, bh = 74 + obs.length * 26, bx = MID.x - bw / 2, by = MID.y - bh / 2;
@@ -781,7 +834,7 @@ OM.SCENES = OM.SCENES || {};
       if (!l.shown) { l.shown = true; OM.sfx('coin', { pitch: 1 + i * 0.1 }); }
       const yy = y + 46 + i * 13;
       OM.FONT.draw(ctx, S.players[l.pi].name + ' · ' + l.label, x + 14, yy, { color: '7' });
-      OM.FONT.draw(ctx, '+' + OM.fmt(l.v), x + w - 14, yy, { color: PCOL[l.pi], align: 'right' });
+      OM.FONT.draw(ctx, (l.v >= 0 ? '+' : '-') + OM.fmt(Math.abs(l.v)), x + w - 14, yy, { color: l.v >= 0 ? PCOL[l.pi] : 'c', align: 'right' });
     });
     // marcador de la serie
     const yb = y + 52 + lines.length * 13;
@@ -789,7 +842,7 @@ OM.SCENES = OM.SCENES || {};
     S.players.forEach((P, pi) => {
       OM.FONT.draw(ctx, P.name, x + 14, yb + pi * 16 + 2, { color: PCOL[pi], shadow: '0' });
       OM.FONT.draw(ctx, P.wins + (P.wins === 1 ? ' partida' : ' partidas'), x + w / 2 + 10, yb + pi * 16 + 2, { color: '6', align: 'center' });
-      OM.FONT.draw(ctx, OM.fmt(T.shown[pi]) + ' pts', x + w - 14, yb + pi * 16 + 2, { color: '8', align: 'right' });
+      OM.FONT.draw(ctx, S.caos ? (pi === win ? '¡GANA!' : '') : OM.fmt(T.shown[pi]) + ' pts', x + w - 14, yb + pi * 16 + 2, { color: S.caos ? PCOL[pi] : '8', align: 'right' });
     });
     const ready = E.t > 0.6 + lines.length * 0.3;
     if (ready && G.button(cx - 70, y + h - 26, 140, 20, S.done ? 'VER RESULTADO' : 'SIGUIENTE PARTIDA', 'gold', false, 'Enter')) leave();
@@ -802,16 +855,18 @@ OM.SCENES = OM.SCENES || {};
     OM.UI.panel(ctx, x, y, w, h, 'dark');
     OM.FONT.draw(ctx, 'CÓMO SE JUEGA', OM.W / 2, y + 8, { color: '8', size: 2, align: 'center', shadow: '0' });
     const rules = M.mode === '8'
-      ? ['{h}BOLA 8{/}: el primero que emboca tras el saque se queda ese grupo (lisas 1-7 o rayadas 9-15).', 'Toca primero una bola de tu grupo. Si embocas una tuya, sigues tirando.', 'Con tu grupo limpio, mete la 8 y ganas la partida. Meterla antes = pierdes la partida.']
+      ? ['{h}BOLA 8{/}: el primero que emboca tras el saque se queda ese grupo (lisas 1-7 o rayadas 9-15).', 'Toca primero una bola de tu grupo. Si embocas una tuya, sigues tirando.', 'Con tu grupo limpio, mete la 8 y ganas la partida. Meterla antes = {c}pierdes la serie entera{/} y te quedas sin puntos.']
       : ['{h}BOLA 9{/}: toca siempre primero la bola más baja de la mesa.', 'Cualquier bola que entre en un tiro legal cuenta y sigues tirando.', 'Quien mete la 9 con un tiro legal gana la partida.'];
     const txt = rules.concat([
       '{c}FALTA{/} (blanca dentro, no tocar nada, tocar primero una bola que no toca, que ninguna bola toque banda tras el contacto sin embocar nada, o agotar los ' + OM.POINTS.clock + ' segundos del tiro): -' + T.mods.foulCost + ' puntos y bola en mano para el rival.',
       ' ',
-      '{q}PUNTOS x COMBO{/}: cada bola 100. Doble x2, triple x3, cuatro o más x5. Banda +50, combinación +100, de rebote +100, de lejos +50, saltar por encima de una bola o massé +150. Cada tiro seguido que emboca (tacada) suma +1 Combo.',
-      'Gana la SERIE quien tenga más puntos tras las 5 partidas. Ganar una partida da un buen pellizco, y la final vale el triple.',
+      S.caos ? '{q}SIN PUNTOS{/}: gana quien gane la partida. El dinero sirve para la tienda; cada bola que mete el rival te da $' + OM.CAOS.rivalBall + '. {c}MECHA{/}: como mucho ' + OM.CAOS.fuse + ' tiros seguidos, luego el turno pasa.' : '{q}PUNTOS x COMBO{/}: cada bola 100. Doble x2, triple x3, cuatro o más x5. Banda +50, combinación +100, de rebote +100, de lejos +50, saltar por encima de una bola o massé +150. Cada tiro seguido que emboca (tacada) suma +1 Combo.',
+      S.caos ? ' ' : 'Gana la SERIE quien tenga más puntos tras las 5 partidas. Ganar una partida da un buen pellizco, y la final vale el triple.',
       ' ',
       '{u}MANDOS{/}: apunta con el ratón, arrastra hacia atrás para cargar y suelta. WASD (o la bola de abajo) = efecto. Q/E (o el taco de abajo) = ángulo de golpe: con efecto lateral hace {u}massé{/} (curva) y al centro y fuerte la blanca {u}salta{/}. El efecto y el ángulo se reinician en cada tiro.',
-      '{h}TIENDA{/}: antes de cada partida compras con $. Hasta ' + OM.SHOP.slots + ' {q}comodines{/} (puntos y dinero, toda la serie), 1 {u}hechizo{/} (cambia la partida, dura una) y 1 {v}activo{/} (un uso: clic en la carta y USAR). Los trucos dan $.',
+      S.caos
+        ? '{c}MODO CAOS{/}: una partida. En el turno del RIVAL compras un hechizo y un activo (tecla B); si encadena tiros, te llegan trampas. Las {c}rojas{/} le caen encima en el acto; las {q}azules{/} se disparan al empezar tu turno. Todo dura un turno. La mesa cambia cada ' + OM.CAOS.every + ' turnos.'
+        : '{h}TIENDA{/}: antes de cada partida compras con $. Hasta ' + OM.SHOP.slots + ' {q}comodines{/} (puntos y dinero, toda la serie), 1 {u}hechizo{/} (cambia la partida, dura una) y 1 {v}activo{/} (un uso: clic en la carta y USAR). Los trucos dan $.',
     ]);
     let yy = y + 32;
     txt.forEach((p) => { OM.FONT.wrap(p, w - 24, 1).forEach((ln) => { OM.FONT.draw(ctx, ln, x + 12, yy, { color: '7' }); yy += 11; }); yy += 2; });
@@ -825,6 +880,256 @@ OM.SCENES = OM.SCENES || {};
     OM.FONT.draw(ctx, OM.NET.error, OM.W / 2, 144, { color: 'c', align: 'center', shadow: '0' });
     OM.FONT.draw(ctx, 'La serie online no puede continuar.', OM.W / 2, 158, { color: '6', align: 'center' });
     if (G.button(OM.W / 2 - 60, 180, 120, 18, 'SALIR AL MENÚ', 'dark')) { OM.NET.close(); OM.go('title'); }
+  }
+
+  // ---------------- MODO CAOS ----------------
+  // Comprar = lanzar. Lenguaje visual: ROJO = cae sobre el que tira (trastadas y trampas), AZUL = para tu turno.
+  // La tienda se despliega en el turno del rival (una carta por turno); la carta vuela a su destino;
+  // la franja EN JUEGO (donde la serie tiene los huecos de hechizo y activo) muestra lo que afecta al tiro actual.
+  // Cada compra es una "op" numerada (MT.caosOp): en el online se manda al rival y se reaplica tras su sync si llegó tarde.
+  const DR = { x: L.bottom.x, y: 258, w: L.bottom.w, h: 96 };
+  const TRAY = { x: L.jokers.x, y: L.jokers.y + 2, w: L.jokers.w }; // el CAOS no tiene comodines: toda la fila es EN JUEGO
+  const CONSUM_C = { x: L.consum.x + 40, y: L.consum.y + 10 };
+  const caosLocal2 = () => S_().players.every((P) => P.kind === 'human');
+  // quién compra en este dispositivo ahora (-1 = nadie): el jugador humano que NO tira
+  function caosShopper() {
+    const S = S_(), M = S.M;
+    if (!T || !T.caos || !M.caos || M.winner != null || T.phase === 'intro' || T.phase === 'end') return -1;
+    const pi = 1 - M.turn;
+    return S.players[pi].kind === 'human' ? pi : -1;
+  }
+  const caosOver = () => !!(T && T.caos && T.caos.open && caosShopper() >= 0 && OM.G.inside(DR.x, DR.y, DR.w, DR.h));
+  const trayPos = () => ({ x: TRAY.x + 4, y: TRAY.y });
+  const offerPos = (k) => ({ x: DR.x + 12 + k * 50, y: DR.y + 18 });
+  const shopDone = (sh) => sh.got.hechizo && sh.got.activo;
+
+  // carta que vuela de a hasta b y al llegar revienta (then: callback)
+  function flyCard(id, a, b, bad, then, delay) {
+    T.caos.fly.push({ id, a, b, bad, then, t: -(delay || 0), dur: 0.55 });
+    OM.sfx('card_flip', { pitch: 1.3 });
+  }
+  function updateCaos(dt) {
+    const S = S_(), M = S.M, C = T.caos;
+    if (C.note) { C.note.t -= dt; if (C.note.t <= 0) C.note = null; }
+    if (C.cond) { C.cond.t -= dt; if (C.cond.t <= 0) C.cond = null; }
+    if (C.closeT > 0) { C.closeT -= dt; if (C.closeT <= 0) C.open = false; }
+    C.fly = C.fly.filter((f) => {
+      f.t += dt;
+      if (f.t < f.dur) return true;
+      const def = OM.jokerDef(f.id);
+      OM.FX.burst(f.b.x + 20, f.b.y + 27, f.bad ? 'ember' : 'gold', 22); OM.FX.shake(f.bad ? 3 : 1.5, 0.2);
+      if (f.bad) OM.FX.flash('a', 0.18, 0.25);
+      OM.FX.popText(MID.x, F.y + 30, def.name.toUpperCase() + '!', f.bad ? 'c' : 'q', { size: 2 });
+      OM.sfx(f.bad ? 'curse' : 'level_up', { vol: 0.7 });
+      if (f.then) f.then();
+      return false;
+    });
+    const sp = caosShopper();
+    if (sp < 0) C.open = false;
+    else if (OM.IN.kp.KeyB && !OM.typing && !T.paused && !T.help) { C.open = !C.open; C.closeT = 0; OM.sfx('card_flip'); }
+    // el bot que espera compra su carta mientras el otro apunta
+    if (!M.caos || M.winner != null || T.phase === 'intro' || T.phase === 'end' || ((T.paused || T.help) && !online())) return;
+    const bi = 1 - M.turn;
+    if (S.players[bi].kind !== 'bot') return;
+    C.botT -= dt;
+    if (C.botT > 0) return;
+    C.botT = 2 + Math.random() * 3;
+    const a = OM.AI.caosAct(S, bi);
+    if (a) caosDo(bi, a);
+  }
+  // acción de tienda de un jugador de este dispositivo (humano o bot)
+  function caosDo(pi, a) {
+    const S = S_(), C = S.M.caos;
+    if (!C) return null;
+    const op = Object.assign({ pi, n: C.ops[pi] }, a);
+    const r = MT.caosOp(S, op, T.W);
+    if (online() && S.players[pi].kind === 'human') { OM.NET.send({ t: 'cop', op }); T.caos.pending.push(op); }
+    caosFeedback(op, r);
+    return r;
+  }
+  // acción de tienda que llega del rival online
+  function caosRemote(op) { if (S_().M.caos) caosFeedback(op, MT.caosOp(S_(), op, T.W)); }
+  function caosFeedback(op, r) {
+    const S = S_(), C = T.caos;
+    if (!r) return;
+    const mine = S.players[op.pi].kind === 'human' && (!online() || op.pi === S.me);
+    if (r.err) { if (mine) { C.note = { text: r.err, t: 1.6 }; OM.sfx('click', { pitch: 0.6 }); } return; }
+    OM.META.seen[r.id] = 1;
+    const shown = mine && C.open;
+    const from = shown ? offerPos(r.k) : CONSUM_C;
+    if (shown && shopDone(S.M.caos.shop[op.pi])) C.closeT = 0.9;
+    OM.sfx('buy');
+    if (r.mode === 'now') flyCard(r.id, from, r.used ? { x: MID.x - 20, y: MID.y - 27 } : trayPos(), true, () => { if (r.used) useFx(r.used, op.pi, null); refreshMods(); });
+    else flyCard(r.id, from, CONSUM_C, false, null);
+    refreshMods();
+  }
+  // fin de turno: los hechizos que se acaban revientan en la franja; paga de la tienda; mesa nueva
+  function caosTurnFx(info) {
+    const S = S_(), C = T.caos;
+    info.expired.forEach((x) => { const p = C.tray[x.id]; if (p) { OM.FX.burst(p.x + 10, p.y + 14, 'smoke', 16); OM.FX.burst(p.x + 10, p.y + 14, 'spark', 8); } });
+    if (info.expired.length) OM.sfx('curse', { pitch: 0.6, vol: 0.5 });
+    if (info.pay) { const b = boxPos(info.payTo); OM.FX.popText(b.x, b.y + 12, '+$' + info.pay, 'i', { size: 2 }); OM.sfx('coin', { vol: 0.5 }); }
+    if (info.cond) { C.cond = { t: 2.8, ids: S.M.obstacles.slice() }; OM.sfx('boss'); OM.FX.flash('a', 0.3, 0.5); OM.FX.shake(4, 0.4); }
+  }
+
+  // EN JUEGO: todo lo que afecta al tiro actual (rojo = del rival, azul = propio)
+  function trayItems() {
+    const S = S_(), M = S.M, me = M.turn, fx = M.fx, out = [];
+    S.players.forEach((Pl, pi) => Pl.jokers.forEach((J) => { const d = OM.jokerDef(J.id); if (OM.jtype(d) === 'hechizo' && MT.spellTarget(pi, d) === me) out.push({ id: J.id, bad: pi !== me }); }));
+    if (fx.bomb) out.push({ id: 'dinamita' }); if (fx.free) out.push({ id: 'tiro_gratis' }); if (fx.rewind) out.push({ id: 'marcha_atras' });
+    if (fx.boost === me) out.push({ id: 'boca_infierno' }); if (fx.xshot[me]) out.push({ id: 'gran_golpe' });
+    if (fx.hex === me) out.push({ id: 'vudu', bad: true }); if (fx.rush === me) out.push({ id: 'reloj_arena', bad: true }); if (fx.shrink === me) out.push({ id: 'sabotaje', bad: true });
+    return out;
+  }
+  function drawTray(ctx, t) {
+    const G = OM.G, C = T.caos, items = T.phase === 'end' ? [] : trayItems(), n = items.length;
+    const sc = n <= 6 ? 1 : 0.7, sp = n <= 6 ? 48 : 30;
+    C.tray = {};
+    items.forEach((it, i) => {
+      const def = OM.jokerDef(it.id), x = TRAY.x + 4 + i * sp, y = TRAY.y + (sc < 1 ? 6 : 0), w = Math.round(L.cardW * sc), h = Math.round(L.cardH * sc);
+      C.tray[it.id] = { x, y };
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 6 + i); ctx.strokeStyle = OM.PAL[it.bad ? 'c' : 'q']; ctx.lineWidth = 2;
+      ctx.strokeRect(x - 1, y - 1, w + 2, h + 2); ctx.globalAlpha = 1;
+      OM.CARDS.drawJoker(ctx, def, x, y, { t, scale: sc, wobble: true, seed: i });
+      if (G.inside(x, y, w, h)) G.tooltip(x + w / 2, y + h + 8, def.name, OM.HUD.defDesc(def), it.bad ? 'c' : 'q', it.bad ? 'Contra el que tira' : 'A favor del que tira');
+    });
+  }
+
+  // Bolsa del Diablo sobre el paño
+  function drawBag(ctx, k, t) {
+    const P = OM.PAL, x = Math.round(k.x), y = Math.round(k.y + Math.sin(t * 3) * 1.5);
+    ctx.globalAlpha = 0.25 + 0.2 * Math.sin(t * 5); ctx.fillStyle = P.i; ctx.beginPath(); ctx.arc(x, y + 1, k.r + 4, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = P['0']; ctx.beginPath(); ctx.arc(x, y + 1, k.r + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.b; ctx.beginPath(); ctx.arc(x, y + 1, k.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.d; ctx.fillRect(x - 3, y - 2, 2, 2);
+    ctx.fillStyle = P['0']; ctx.fillRect(x - 2, y - k.r - 2, 5, 3);
+    ctx.fillStyle = P.h; ctx.fillRect(x - 1, y - k.r - 1, 3, 1);
+    ctx.fillStyle = P.i; ctx.fillRect(x, y - 1, 1, 5); ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x - 1, y + 2, 3, 1);
+    if (Math.floor(t * 5) % 6 === 0) { ctx.fillStyle = P['8']; ctx.fillRect(x + k.r, y - k.r, 1, 1); }
+  }
+  // insignia de la carta: rojo = cae ya sobre el rival, azul = para tu turno
+  function badge(ctx, x, y, bad) {
+    const P = OM.PAL;
+    ctx.fillStyle = P['0']; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P[bad ? 'c' : 'q']; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P['8'];
+    if (bad) { ctx.fillRect(x - 1, y - 3, 2, 4); ctx.fillRect(x - 1, y + 2, 2, 1); } // !
+    else { ctx.fillRect(x - 3, y, 7, 1); ctx.fillRect(x, y - 3, 1, 7); }          // +
+  }
+
+  // mecha: tiros seguidos que le quedan al que tira, sobre la banda de arriba. Se quema con cada tiro; la última chisporrotea
+  function drawFuse(ctx, t) {
+    const S = S_(), M = S.M, n = OM.CAOS.fuse;
+    if (T.phase === 'intro' || T.phase === 'end' || M.winner != null) return;
+    const left = Math.max(0, n - (M.chain || 0)), sw = 20, gap = 4, x0 = FUSE.x, y = FUSE.y, col = PCOL[M.turn];
+    // bomba al final de la mecha, del color del que tira
+    const bx = x0 + n * (sw + gap) + 5, by = y + 2;
+    ctx.fillStyle = OM.PAL['0']; ctx.beginPath(); ctx.arc(bx, by, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = OM.PAL[col]; ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = OM.PAL['8']; ctx.fillRect(bx - 3, by - 3, 2, 2);
+    for (let i = 0; i < n; i++) {
+      const x = x0 + i * (sw + gap), lit = i >= n - left, last = left === 1 && i === n - 1;
+      ctx.fillStyle = OM.PAL['0']; ctx.fillRect(x - 1, y - 1, sw + 2, 6);
+      ctx.fillStyle = OM.PAL[lit ? (last ? (Math.floor(t * 8) % 2 ? 'c' : 'i') : 'h') : '2'];
+      ctx.fillRect(x, y, sw, 4);
+      ctx.fillStyle = OM.PAL[lit ? 'i' : '3'];
+      for (let k = 1; k < sw; k += 4) ctx.fillRect(x + k, y + (k % 8 < 4 ? 0 : 3), 2, 1); // trenzado
+    }
+    // chispa donde arde
+    if (left > 0) {
+      const sx = x0 + (n - left) * (sw + gap) - 2, f = Math.floor(t * 14) % 3;
+      ctx.fillStyle = OM.PAL['c']; ctx.fillRect(sx - 2, y - 2 - f, 5, 5 + f);
+      ctx.fillStyle = OM.PAL['i']; ctx.fillRect(sx - 1, y - f, 3, 3);
+      ctx.fillStyle = OM.PAL['8']; ctx.fillRect(sx, y + 1 - f, 1, 1);
+      if (Math.random() < 0.3) OM.FX.burst(sx, y, 'ember', 1);
+    }
+  }
+
+  function drawCaos(ctx, t) {
+    const S = S_(), C = T.caos, G = OM.G;
+    drawTray(ctx, t);
+    drawFuse(ctx, t);
+    // aviso de mesa nueva
+    if (C.cond && T.phase !== 'end') {
+      const a = Math.min(1, C.cond.t * 2), ids = C.cond.ids, h = 28 + ids.length * 22, y = MID.y - 36;
+      ctx.globalAlpha = a * 0.85; ctx.fillStyle = OM.PAL['0']; ctx.fillRect(F.x, y, F.w, h); ctx.globalAlpha = a;
+      OM.FONT.draw(ctx, '¡LA MESA CAMBIA!', MID.x, y + 5, { color: 'c', size: 2, align: 'center', shadow: '0', wave: 1, t });
+      ids.forEach((id, i) => {
+        const o = OM.obstacleDef(id);
+        OM.FONT.draw(ctx, o.name.toUpperCase(), MID.x, y + 26 + i * 22, { color: 'i', align: 'center', shadow: '0' });
+        OM.FONT.draw(ctx, o.desc, MID.x, y + 36 + i * 22, { color: '7', align: 'center' });
+      });
+      ctx.globalAlpha = 1;
+    }
+    // vista previa de adónde va la carta que estás mirando
+    if (C.hov) {
+      const pulse = 0.45 + 0.4 * Math.sin(t * 9);
+      ctx.globalAlpha = pulse; ctx.strokeStyle = OM.PAL[C.hov.bad ? 'c' : 'q']; ctx.lineWidth = 2;
+      if (C.hov.bad) { ctx.strokeRect(F.x - 2, F.y - 2, F.w + 4, F.h + 4); ctx.strokeRect(TRAY.x, TRAY.y - 2, TRAY.w, L.cardH + 4); }
+      else ctx.strokeRect(L.consum.x - 1, L.consum.y - 1, L.consum.w + 2, L.consum.h + 2);
+      ctx.globalAlpha = 1;
+    }
+    C.hov = null;
+    const sp = caosShopper();
+    if (sp >= 0) {
+      if (!C.open) {
+        const done = shopDone(S.M.caos.shop[sp]), pulse = Math.floor(t * 3) % 2;
+        if (G.button(L.consum.x, L.consum.y + L.consum.h - 13, L.consum.w, 13, 'TIENDA (B)', done ? 'dark' : pulse ? 'gold' : 'red', T.paused || T.help)) { C.open = true; OM.sfx('card_flip'); }
+      } else drawCaosShop(ctx, t, S, sp);
+    }
+    // cartas en vuelo (encima de todo)
+    C.fly.forEach((f) => {
+      if (f.t < 0) return;
+      const k = Math.min(1, f.t / f.dur), e = 1 - Math.pow(1 - k, 3), arc = Math.sin(k * Math.PI) * 30;
+      const x = f.a.x + (f.b.x - f.a.x) * e, y = f.a.y + (f.b.y - f.a.y) * e - arc;
+      OM.CARDS.drawJoker(ctx, OM.jokerDef(f.id), Math.round(x), Math.round(y), { t, scale: 1 + Math.sin(k * Math.PI) * 0.35 });
+    });
+  }
+  function drawCaosShop(ctx, t, S, pi) {
+    const G = OM.G, P = S.players[pi], M = S.M, C = T.caos, sh = M.caos.shop[pi], D = DR, locked = T.paused || T.help, done = shopDone(sh);
+    OM.UI.panel(ctx, D.x, D.y, D.w, D.h, sh.rally ? 'blood' : 'dark');
+    OM.FONT.draw(ctx, sh.rally ? '¡TRAMPAS!' : 'TIENDA', D.x + 8, D.y + 5, { color: sh.rally ? 'c' : 'h', shadow: '0', wave: sh.rally ? 1 : 0, t });
+    // lo que ya compraste en este turno: un hueco por tipo
+    ['hechizo', 'activo'].forEach((ty, i) => {
+      const x = D.x + 70 + i * 22, on = sh.got[ty], col = OM.JTYPE[ty].color;
+      ctx.fillStyle = OM.PAL[on ? '3' : col]; ctx.fillRect(x, D.y + 5, 16, 7);
+      ctx.fillStyle = OM.PAL['0']; ctx.fillRect(x + 1, D.y + 6, 14, 5);
+      if (!on) { ctx.fillStyle = OM.PAL[col]; ctx.fillRect(x + 2, D.y + 7, 12, 3); }
+    });
+    if (G.button(D.x + D.w - 20, D.y + 3, 15, 12, 'x', 'dark', locked)) { C.open = false; return; }
+    sh.offers.forEach((o, k) => {
+      if (o.sold) return; // la comprada ya salió volando
+      const def = OM.jokerDef(o.id), p = offerPos(k), cost = MT.caosPrice(S, o.id), bad = MT.isTrap(def);
+      const typeDone = !!sh.got[OM.jtype(def)], why = MT.caosCanBuy(S, pi, k), over = !locked && !typeDone && G.inside(p.x, p.y, L.cardW, L.cardH);
+      OM.CARDS.drawJoker(ctx, def, p.x, p.y - (over ? 4 : 0), { t, hover: over, wobble: true, seed: k + sh.win * 7, alpha: typeDone ? 0.15 : why ? 0.5 : 1 });
+      if (!typeDone) badge(ctx, p.x + L.cardW - 2, p.y + 2 - (over ? 4 : 0), bad);
+      OM.FONT.draw(ctx, '$' + cost, p.x + L.cardW / 2, p.y + L.cardH + 5, { color: typeDone ? '4' : P.money >= cost ? 'i' : 'c', align: 'center', shadow: '0' });
+      if (over) {
+        C.hov = { bad };
+        G.cursor = why ? 'normal' : 'grab';
+        G.tooltip(p.x + L.cardW / 2, D.y - 100, def.name, OM.HUD.defDesc(def), bad ? 'c' : 'q', why || '$' + cost);
+        if (G.clicked(p.x, p.y, L.cardW, L.cardH)) caosDo(pi, { a: 'buy', k });
+      }
+    });
+    // dinero
+    const rx = D.x + 12 + 5 * 50 + 10;
+    OM.FONT.draw(ctx, '$' + P.money, rx, D.y + 24, { color: 'i', size: 2, shadow: '0' });
+    if (C.note) OM.FONT.wrap(C.note.text, D.x + D.w - 8 - rx, 1).slice(0, 2).forEach((ln, i) => OM.FONT.draw(ctx, ln, rx, D.y + 50 + i * 10, { color: 'c' }));
+  }
+  function drawCaosIntro(ctx, t) {
+    const S = S_(), M = S.M, CA = OM.CAOS, a = Math.min(1, T.intro * 2);
+    ctx.globalAlpha = a;
+    const bw = 380, bh = 124, bx = MID.x - bw / 2, by = MID.y - bh / 2;
+    OM.UI.panel(ctx, bx, by, bw, bh, 'blood');
+    OM.FONT.draw(ctx, '¡MODO CAOS!', MID.x, by + 9, { color: 'c', size: 2, align: 'center', shadow: '0', wave: 1, t });
+    OM.FONT.draw(ctx, OM.MODES[M.mode].name + ' · una partida · sin puntos: gana quien la gane', MID.x, by + 30, { color: '8', align: 'center' });
+    [
+      '{h}TIENDA{/} en el turno del rival: un {u}hechizo{/} y un {v}activo{/} (tecla B).',
+      'Las {c}rojas{/} le caen al rival en el acto. Las {q}azules{/} son para tu turno.',
+      '{c}La mesa cambia cada ' + CA.every + ' turnos{/}. Pasa la blanca por la {i}Bolsa del Diablo{/}.',
+    ].forEach((r, i) => OM.FONT.draw(ctx, '· ' + r, bx + 14, by + 48 + i * 13, { color: '7' }));
+    OM.FONT.draw(ctx, 'Saca ' + S.players[M.breaker].name + ' · ' + CA.clock + ' s por tiro · clic para empezar', MID.x, by + bh - 15, { color: PCOL[M.breaker], align: 'center' });
+    ctx.globalAlpha = 1;
   }
 
   // depuración / playtest automatizado

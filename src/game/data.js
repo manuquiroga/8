@@ -10,7 +10,7 @@
 //
 // Hooks de comodín (todos opcionales). S = marcador del tiro (ver OM.Match.resolve):
 //   mods:  {pocketMul, pocketPull, powerMul, guide, guideLen, noScratch, trickMul, pointsMul, clock, ...} en TU turno
-//   rival: {pocketMul, guide, shake, clock, noSpin, tilt, frictionMul} en el turno del RIVAL (trastadas)
+//   rival: {pocketMul, guide, shake, clock, noSpin, tilt, frictionMul, powerMul, fog, lie, seal, drunk} en el turno del RIVAL (trastadas)
 //   onBall(S, b)      — por cada bola TUYA embocada en un tiro legal. b = {num, pocket, banked, combo}
 //   onPot(S, b)       — por cada bola embocada en un tiro legal (también las del rival)
 //   onShot(S)         — tiro legal que emboca al menos una bola tuya
@@ -47,6 +47,7 @@ OM.POINTS = {
   foul: 50,         // lo que resta una falta
   win: [1000, 1250, 1500, 2000, 3000], // por ganar cada partida de la serie
   leftover: 100,    // paliza: por cada bola que le quedó al rival
+  cash: 50,         // al final de la serie, cada $ que sobra
   clock: 30,        // segundos por tiro (El Reloj: 15)
   multi: [1, 1, 2, 3, 5], // Combo base por nº de bolas tuyas en el tiro (4+ = x5)
   streakCap: 5,
@@ -235,6 +236,18 @@ OM.JOKERS = [
   { id: 'tembleque', type: H, art: 'vampiro', name: 'Tembleque', rarity: 'legendario', desc: 'El taco del RIVAL tiembla al apuntar.', rival: { shake: 1 } },
   { id: 'barquero', type: H, name: 'El Barquero', rarity: 'legendario', desc: 'En tu turno las troneras atraen las bolas con fuerza y son un 10% más grandes.',
     mods: { pocketMul: 1.1, pocketPull: 3 } },
+  // nuevos (3.2)
+  { id: 'plomo', type: H, name: 'Taco de Plomo', rarity: 'comun', desc: 'El RIVAL tira con un 35% menos de potencia.', rival: { powerMul: 0.65 } },
+  { id: 'codicia', pts: true, type: H, art: 'garra_codicia', name: 'Codicia', rarity: 'comun', desc: 'Cada bola tuya embocada: +60 Puntos y +$1.',
+    onBall(S) { S.add({ pts: 60, cash: 1 }, this); } },
+  { id: 'saqueo', pts: true, type: H, name: 'Saqueo', rarity: 'raro', desc: 'Cada bola tuya embocada ROBA 80 Puntos al rival.',
+    onBall(S) { S.add({ steal: 80 }, this); } },
+  { id: 'furia', pts: true, type: H, name: 'Furia', rarity: 'raro', desc: 'Tus tiros que embocan: x2 Combo.',
+    onShot(S) { S.add({ xmult: 2 }, this); } },
+  { id: 'niebla_negra', type: H, name: 'Niebla Negra', rarity: 'raro', desc: 'El RIVAL solo ve la mesa cerca de su blanca.', rival: { fog: true } },
+  { id: 'espejismo', type: H, name: 'Espejismo', rarity: 'epico', desc: 'La guía del RIVAL MIENTE: apunta un poco torcida.', rival: { lie: 0.07 } },
+  { id: 'cerrojo', type: H, name: 'Cerrojo', rarity: 'epico', desc: 'En el turno del RIVAL las troneras LATERALES están selladas.', rival: { seal: true } },
+  { id: 'borrachera', type: H, name: 'Borrachera', rarity: 'legendario', desc: 'El taco del RIVAL se tambalea y le pone EFECTO al azar en cada tiro.', rival: { drunk: 1 } },
 
   // ======================= ACTIVOS: un uso (1 a la vez) =======================
   { id: 'la_mano', type: A, art: 'carronero', name: 'La Mano', rarity: 'comun', desc: 'ACTIVO: coloca la blanca donde quieras.', active: 'hand' },
@@ -243,10 +256,17 @@ OM.JOKERS = [
   { id: 'terremoto', type: A, art: 'eclipse', name: 'Terremoto', rarity: 'raro', desc: 'ACTIVO: sacude la mesa. Tus bolas que caigan valen +150 Puntos; las del RIVAL vuelven a la mesa. No gasta tu turno.', active: 'quake' },
   { id: 'dinamita', type: A, art: 'parca', name: 'Dinamita', rarity: 'raro', desc: 'ACTIVO: tu próximo tiro EXPLOTA al primer contacto.', active: 'bomb' },
   { id: 'vudu', type: A, name: 'Muñeco Vudú', rarity: 'raro', desc: 'ACTIVO: en el próximo tiro del RIVAL su taco tiembla mucho y no tiene guía.', active: 'hex' },
-  { id: 'atraco', type: A, name: 'Atraco', rarity: 'raro', desc: 'ACTIVO: ROBA al rival el 10% de sus puntos (entre 150 y 800).', active: 'heist' },
-  { id: 'gran_golpe', type: A, name: 'Gran Golpe', rarity: 'epico', desc: 'ACTIVO: tu próximo tiro que emboque en esta partida: x3 Combo.', active: 'xshot' },
+  { id: 'atraco', pts: true, type: A, name: 'Atraco', rarity: 'raro', desc: 'ACTIVO: ROBA al rival el 10% de sus puntos (entre 150 y 800).', active: 'heist' },
+  { id: 'gran_golpe', pts: true, type: A, name: 'Gran Golpe', rarity: 'epico', desc: 'ACTIVO: tu próximo tiro que emboque en esta partida: x3 Combo.', active: 'xshot' },
   { id: 'marcha_atras', type: A, name: 'Marcha Atrás', rarity: 'epico', desc: 'ACTIVO: si tu próximo tiro no emboca una bola tuya (fallo, falta o la 8 antes de tiempo), se deshace y repites.', active: 'rewind' },
+  // nuevos (3.2). anytime: en MODO CAOS también se pueden usar en el turno del RIVAL (desde la tienda)
+  { id: 'reloj_arena', type: A, name: 'Reloj de Arena', rarity: 'comun', desc: 'ACTIVO: el próximo tiro del RIVAL solo tiene 8 segundos (si se acaban, su taco dispara solo).', active: 'rush', anytime: true },
+  { id: 'carterista', type: A, name: 'Carterista', rarity: 'comun', desc: 'ACTIVO: ROBA hasta $6 del dinero del rival.', active: 'pickpocket', anytime: true },
+  { id: 'sabotaje', type: A, name: 'Sabotaje', rarity: 'raro', desc: 'ACTIVO: en el próximo tiro del RIVAL las troneras son un 40% más chicas.', active: 'shrink', anytime: true },
+  { id: 'tornado', type: A, name: 'Tornado', rarity: 'epico', desc: 'ACTIVO: todas las bolas (menos la blanca) salen volando a sitios al azar. No gasta tu turno.', active: 'tornado' },
 ];
+// vudú y atraco también valen fuera de turno en el modo CAOS
+OM.JOKERS.forEach((j) => { if (j.active === 'hex' || j.active === 'heist') j.anytime = true; });
 
 // Tacos: el estilo de cada jugador durante toda la serie.
 OM.CUES = [
@@ -269,13 +289,51 @@ OM.OBSTACLES = [
   { id: 'escarcha', name: 'La Escarcha', desc: 'El paño apenas frena. Todo resbala.', grp: 'fr' },
   { id: 'niebla', name: 'La Niebla', desc: 'Solo se ve cerca de la bola blanca.', grp: 'vis' },
   { id: 'ciego', name: 'El Ciego', desc: 'Sin guía de tiro: solo el taco.', grp: 'vis' },
-  { id: 'boca', name: 'La Boca', desc: 'Las troneras se encogen un 22%.' },
+  { id: 'boca', name: 'La Boca', desc: 'Las troneras se encogen un 22%.', grp: 'pk' },
   { id: 'pilares', art: 'espina', name: 'Los Pilares', desc: 'Tres pilares de hueso rebotan las bolas como un pinball.', grp: 'obj' },
   { id: 'vortice', art: 'gloton', name: 'El Vórtice', desc: 'Un remolino en el centro tuerce las trayectorias.', grp: 'obj' },
   { id: 'portales', art: 'coleccionista', name: 'Los Portales', desc: 'Lo que entra por un portal sale por el otro.', grp: 'obj' },
   { id: 'reloj', name: 'El Reloj', desc: '15 segundos por tiro. Si se acaban, el taco dispara solo.' },
-  { id: 'verdugo', name: 'El Verdugo', desc: 'Cada falta cuesta 300 Puntos.' },
+  { id: 'verdugo', name: 'El Verdugo', pts: true, desc: 'Cada falta cuesta 300 Puntos.' },
+  // solo en el MODO CAOS (condiciones de mesa que cambian cada 2 turnos)
+  { id: 'bocazas', art: 'boca', caos: true, name: 'Bocazas', desc: 'Las troneras son un 35% más grandes.', grp: 'pk' },
+  { id: 'fiebre', art: 'inquisidora', caos: true, pts: true, name: 'Fiebre', desc: 'Todos los tiros que embocan: x2 Combo.' },
+  { id: 'lluvia', art: 'sanguijuela', caos: true, name: 'Lluvia de Oro', desc: 'Cada bola embocada da +$2 a quien la mete.' },
+  { id: 'rebajas', art: 'tasador', caos: true, name: 'Rebajas', desc: 'La tienda cuesta la mitad.' },
+  { id: 'turbo', art: 'purista', caos: true, name: 'Turbo', desc: '+40% de potencia para los dos.' },
 ];
+
+// ---------------- MODO CAOS ----------------
+// Una sola partida y SIN PUNTOS: gana quien gane la partida. Se compra DURANTE la partida, en el turno del rival.
+// Fuera todo lo que solo da puntos (cartas y condiciones con `pts: true`, comodines de los tacos). Los hechizos duran UN turno.
+// La mesa cambia de condición cada 2 turnos (a partir del turno 6, dos condiciones a la vez).
+// En la mesa aparecen Bolsas del Diablo: si tu blanca pasa por encima, te la quedas.
+OM.CAOS = {
+  start: 5,              // dinero inicial
+  window: 3,             // $ cada vez que se abre tu tienda (empieza el turno del rival)
+  behind: 2,             // extra si vas perdiendo en puntos
+  ball: 0,               // $ por cada bola tuya embocada
+  rivalBall: 1,          // $ para el que espera por cada bola que emboca el que tira (munición contra las tacadas)
+  fuse: 5,               // mecha: como mucho N tiros seguidos; al consumirse, el turno pasa (sin falta)
+  trickCap: 10,          // tope de $ por trucos en la partida
+  clock: 20,             // segundos por tiro (si se acaban, el taco dispara solo)
+  every: 2,              // la mesa cambia cada N turnos
+  double: 6,             // a partir de este turno, dos condiciones a la vez
+  win: 2500,             // puntos por ganar la partida
+  bag: { cash: 4 },      // Bolsa del Diablo
+  offers: 5,             // trastada, trampa, hechizo propio, activo propio y una al azar. Se compra 1 hechizo y 1 activo por turno del rival (sin cambiar)
+  rally: 2,              // con la TACADA del rival en este nivel o más, la tienda del que espera se llena de trampas y vuelve a dejar comprar
+  // comprar = lanzar: trastadas y trampas caen sobre el rival en el acto; lo tuyo se dispara al empezar tu turno
+  price: {
+    comodin: { comun: 4, raro: 6, epico: 8, legendario: 11 },
+    hechizo: { comun: 2, raro: 3, epico: 4, legendario: 6 },
+    activo:  { comun: 2, raro: 3, epico: 4, legendario: 6 },
+  },
+};
+OM.FORMATS = {
+  serie: { name: 'SERIE', desc: '5 partidas con tienda entre medias. Gana quien sume más puntos.' },
+  caos:  { name: 'CAOS', desc: 'Una partida sin puntos: gana quien la gane. Compras en el turno del rival y la mesa cambia cada 2 turnos.' },
+};
 
 // Temas de mesa por partida (reutiliza los círculos)
 OM.MATCH_THEMES = ['limbo', 'lujuria', 'gula', 'ira', 'abismo'];

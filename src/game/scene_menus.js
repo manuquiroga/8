@@ -53,6 +53,7 @@ OM.SCENES = OM.SCENES || {};
     return out;
   }
   const MODE_OPTS = Object.keys(OM.MODES).map((id) => ({ id, name: OM.MODES[id].name }));
+  const FMT_OPTS = Object.keys(OM.FORMATS).map((id) => ({ id, name: OM.FORMATS[id].name }));
 
   function startSeries(cfg, me) {
     OM.S = MT.newSeries(cfg);
@@ -60,7 +61,7 @@ OM.SCENES = OM.SCENES || {};
     OM.S.cfg = cfg;
     OM.S.players.forEach((P) => P.jokers.forEach((J) => (OM.META.seen[J.id] = 1)));
     OM.META.series++; OM.saveMeta();
-    OM.go('shop');
+    OM.go(cfg.caos ? 'table' : 'shop'); // el CAOS no tiene tienda previa: se compra durante la partida
   }
 
   // ---------------- TÍTULO ----------------
@@ -120,18 +121,20 @@ OM.SCENES = OM.SCENES || {};
       this.names = [M.name || 'Jugador', this.vs === 'local' ? (M.name2 || 'Jugador 2') : ''];
       this.cues = [Math.max(0, OM.CUES.findIndex((c) => c.id === M.cue)), 0];
       this.st = { sel: this.cues[0], off: 0 };
-      this.mode = OM.MODES[M.mode] ? M.mode : '8'; this.bot = M.bot || 'medio';
+      this.mode = OM.MODES[M.mode] ? M.mode : '8'; this.bot = M.bot || 'medio'; this.fmt = OM.FORMATS[M.fmt] ? M.fmt : 'serie';
       field = null;
     },
     draw(ctx, t) {
       const G = OM.G, M = OM.META, local = this.vs === 'local', p = this.step;
       OM.typing = false;
       OM.UI.drawBackground(ctx, t, 'map');
-      OM.FONT.draw(ctx, local ? 'SERIE DE 2 JUGADORES' : 'SERIE CONTRA BOT', CX, 8, { color: '8', size: 2, align: 'center', shadow: '0' });
+      OM.FONT.draw(ctx, (this.fmt === 'caos' ? 'CAOS' : 'SERIE') + (local ? ' DE 2 JUGADORES' : ' CONTRA BOT'), CX, 8, { color: '8', size: 2, align: 'center', shadow: '0' });
+      this.fmt = optionRow(ctx, 'FORMATO', 82, 32, FMT_OPTS, this.fmt, 52);
       this.mode = optionRow(ctx, 'JUEGO', 250, 32, MODE_OPTS, this.mode, 70);
       if (!local) this.bot = optionRow(ctx, 'RIVAL', 250, 51, OM.BOT_LEVELS, this.bot, 70);
       else OM.FONT.draw(ctx, 'os turnáis en este mismo dispositivo', 250, 56, { color: '5' });
       OM.FONT.draw(ctx, OM.MODES[this.mode].desc, 480, 37, { color: '5' });
+      if (this.fmt === 'caos') OM.FONT.draw(ctx, '¡CAOS!', 44, 56, { color: 'c', align: 'center', shadow: '0', wave: 1, t });
       OM.FONT.draw(ctx, 'TACO DE', CX - 64, 78, { color: PCOL[p], align: 'right', shadow: '0' });
       this.names[p] = textField(ctx, 'name' + p, CX - 58, 72, 116, this.names[p], 10);
       OM.FONT.draw(ctx, '(clic para cambiar el nombre)', CX + 64, 78, { color: '4' });
@@ -141,15 +144,15 @@ OM.SCENES = OM.SCENES || {};
       if (G.button(CX - 90, 280, 180, 24, last ? '¡A JUGAR!' : 'SIGUIENTE JUGADOR', 'red', false, field ? null : 'Enter')) {
         if (!this.names[p].trim()) this.names[p] = 'Jugador ' + (p + 1);
         if (!last) { this.step = 1; this.st = { sel: this.cues[1], off: 0 }; field = null; return; }
-        M.name = this.names[0]; M.cue = OM.CUES[this.cues[0]].id; M.mode = this.mode; M.bot = this.bot;
+        M.name = this.names[0]; M.cue = OM.CUES[this.cues[0]].id; M.mode = this.mode; M.bot = this.bot; M.fmt = this.fmt;
         if (local) M.name2 = this.names[1];
         const bot = OM.BOT_LEVELS.find((b) => b.id === this.bot);
         const players = [{ name: this.names[0].trim(), kind: 'human', cue: OM.CUES[this.cues[0]].id }];
         if (local) players.push({ name: this.names[1].trim() === players[0].name ? this.names[1].trim() + ' 2' : this.names[1].trim(), kind: 'human', cue: OM.CUES[this.cues[1]].id });
         else players.push({ name: bot.botName, kind: 'bot', level: bot.id, cue: OM.CUES[Math.floor(Math.random() * OM.CUES.length)].id });
-        startSeries({ mode: this.mode, players });
+        startSeries({ mode: this.mode, caos: this.fmt === 'caos', players });
       }
-      OM.FONT.draw(ctx, '5 partidas · antes de cada una pasas por la tienda · las partidas 3, 4 y 5 traen obstáculos', CX, 314, { color: '5', align: 'center' });
+      OM.FONT.draw(ctx, this.fmt === 'caos' ? OM.FORMATS.caos.desc : '5 partidas · antes de cada una pasas por la tienda · las partidas 3, 4 y 5 traen obstáculos', CX, 314, { color: this.fmt === 'caos' ? 'd' : '5', align: 'center' });
       if (G.button(12, 334, 70, 18, 'VOLVER', 'dark', false, field ? null : 'Escape')) { if (p === 1) { this.step = 0; this.st = { sel: this.cues[0], off: 0 }; } else OM.go('title'); }
     },
   };
@@ -160,7 +163,7 @@ OM.SCENES = OM.SCENES || {};
       const M = OM.META;
       this.state = 'menu'; this.code = ''; this.err = null; this.ready = false; this.busy = false; this.copied = 0;
       this.name = M.name || 'Jugador'; this.cue = Math.max(0, OM.CUES.findIndex((c) => c.id === M.cue));
-      this.mode = OM.MODES[M.mode] ? M.mode : '8'; this.hello = 0; this.started = false;
+      this.mode = OM.MODES[M.mode] ? M.mode : '8'; this.fmt = OM.FORMATS[M.fmt] ? M.fmt : 'serie'; this.hello = 0; this.started = false;
       field = null;
       OM.NET.close();
       if (arg && arg.join && OM.NET.available()) this.join(arg.join); // entrando por link: (sitio)/CÓDIGO
@@ -169,13 +172,13 @@ OM.SCENES = OM.SCENES || {};
       this.code = code; this.busy = true; this.err = null;
       OM.NET.join(code).then(() => { this.state = 'lobby'; this.busy = false; }).catch((e) => { this.err = e.message || 'No se pudo entrar'; this.busy = false; });
     },
-    sendHello() { OM.NET.send({ t: 'hello', name: this.name.trim() || 'Jugador', cue: OM.CUES[this.cue].id, ready: this.ready }); if (OM.NET.role === 'h') OM.NET.send({ t: 'cfg', mode: this.mode }); },
+    sendHello() { OM.NET.send({ t: 'hello', name: this.name.trim() || 'Jugador', cue: OM.CUES[this.cue].id, ready: this.ready }); if (OM.NET.role === 'h') OM.NET.send({ t: 'cfg', mode: this.mode, fmt: this.fmt }); },
     begin(st) {
       if (this.started) return;
       this.started = true;
       const me = OM.NET.me();
       OM.META.name = this.name; OM.META.cue = OM.CUES[this.cue].id;
-      startSeries({ seed: st.seed, mode: st.mode, players: st.players.map((p, i) => ({ name: p.name, cue: p.cue, kind: i === me ? 'human' : 'remote' })) }, me);
+      startSeries({ seed: st.seed, mode: st.mode, caos: !!st.caos, players: st.players.map((p, i) => ({ name: p.name, cue: p.cue, kind: i === me ? 'human' : 'remote' })) }, me);
     },
     draw(ctx, t) {
       const G = OM.G, N = OM.NET;
@@ -208,7 +211,7 @@ OM.SCENES = OM.SCENES || {};
       const host = N.role === 'h', rv = N.lobby || {};
       this.hello -= 1 / 60;
       if (this.hello <= 0) { this.hello = 1; this.sendHello(); }
-      if (!host && N.cfg) this.mode = N.cfg.mode;
+      if (!host && N.cfg) { this.mode = N.cfg.mode; this.fmt = N.cfg.fmt || 'serie'; }
       if (N.start) { this.begin(N.start); return; }
       if (N.error) this.err = N.error;
       const link = N.link(N.code);
@@ -246,12 +249,14 @@ OM.SCENES = OM.SCENES || {};
       }
       if (n0 !== this.name) this.hello = Math.min(this.hello, 0.3);
       // modo (lo elige el anfitrión)
-      if (host) { const m = optionRow(ctx, 'JUEGO', CX - 108, 276, MODE_OPTS, this.mode, 70); if (m !== this.mode) { this.mode = m; this.hello = 0; } }
-      else OM.FONT.draw(ctx, 'JUEGO: ' + OM.MODES[this.mode].name + ' (lo elige el anfitrión)', CX, 281, { color: '6', align: 'center' });
+      if (host) {
+        const m = optionRow(ctx, 'JUEGO', CX - 108, 276, MODE_OPTS, this.mode, 70); if (m !== this.mode) { this.mode = m; this.hello = 0; }
+        const f = optionRow(ctx, '', CX + 128, 276, FMT_OPTS, this.fmt, 52); if (f !== this.fmt) { this.fmt = f; this.hello = 0; OM.META.fmt = f; }
+      } else OM.FONT.draw(ctx, 'JUEGO: ' + OM.MODES[this.mode].name + ' · ' + OM.FORMATS[this.fmt].name + ' (lo elige el anfitrión)', CX, 281, { color: '6', align: 'center' });
       if (G.button(CX - 90, 300, 180, 24, this.ready ? 'ESPERANDO AL RIVAL...' : '¡LISTO!', this.ready ? 'dark' : 'red', !N.peer && !this.ready)) { this.ready = !this.ready; this.hello = 0; }
       // el anfitrión arranca cuando los dos están listos
       if (host && this.ready && rv.ready && N.peer && !this.started) {
-        const st = { t: 'start', seed: Math.floor(Math.random() * 1e9), mode: this.mode, players: [{ name: this.name.trim() || 'Anfitrión', cue: OM.CUES[this.cue].id }, { name: (rv.name || 'Invitado') === this.name.trim() ? rv.name + ' 2' : rv.name || 'Invitado', cue: rv.cue || 'peregrino' }] };
+        const st = { t: 'start', seed: Math.floor(Math.random() * 1e9), mode: this.mode, caos: this.fmt === 'caos', players: [{ name: this.name.trim() || 'Anfitrión', cue: OM.CUES[this.cue].id }, { name: (rv.name || 'Invitado') === this.name.trim() ? rv.name + ' 2' : rv.name || 'Invitado', cue: rv.cue || 'peregrino' }] };
         N.send(st); this.begin(st);
       }
       if (G.button(12, 334, 70, 18, 'SALIR', 'dark', false, field ? null : 'Escape')) back();
@@ -487,7 +492,7 @@ OM.SCENES = OM.SCENES || {};
       const meP = S.players[S.me], human = S.players[this.win].kind === 'human';
       this.happy = human;
       if (meP && meP.kind === 'human') {
-        M.bestPts = Math.max(M.bestPts || 0, ...S.players.filter((p) => p.kind === 'human').map((p) => p.points));
+        if (!S.caos) M.bestPts = Math.max(M.bestPts || 0, ...S.players.filter((p) => p.kind === 'human').map((p) => p.points));
         if (S.players[this.win].kind === 'human' && S.players.some((p) => p.kind !== 'human')) M.wins = (M.wins || 0) + 1;
       }
       OM.saveMeta();
@@ -499,13 +504,13 @@ OM.SCENES = OM.SCENES || {};
       OM.UI.drawBackground(ctx, t, this.happy ? 'victory' : 'gameover');
       if (this.happy && (t * 10 | 0) % 7 === 0) OM.FX.burst(100 + Math.random() * 440, 60 + Math.random() * 100, 'gold', 4);
       OM.FX.draw(ctx);
-      OM.FONT.draw(ctx, '¡' + S.players[w].name.toUpperCase() + ' GANA LA SERIE!', CX, 24, { color: PCOL[w], size: 2, align: 'center', shadow: '0', wave: 1, t, scale: 2 });
+      OM.FONT.draw(ctx, '¡' + S.players[w].name.toUpperCase() + (S.caos ? ' GANA EL CAOS!' : ' GANA LA SERIE!'), CX, 24, { color: PCOL[w], size: 2, align: 'center', shadow: '0', wave: 1, t, scale: 2 });
       S.players.forEach((P, pi) => {
         const x = CX + (pi ? 8 : -248), y = 84, pw = 240;
         OM.UI.panel(ctx, x, y, pw, 196, pi === w ? 'gold' : 'dark');
         OM.FONT.draw(ctx, P.name, x + 12, y + 10, { color: PCOL[pi], size: 2, shadow: '0' });
-        OM.FONT.draw(ctx, OM.fmt(P.points), x + pw - 12, y + 10, { color: '8', size: 2, align: 'right', shadow: '0' });
-        const rows = [['Partidas ganadas', P.wins + ' de ' + S.n], ['Mejor tiro', OM.fmt(P.stats.best)], ['Bolas embocadas', String(P.stats.balls)], ['Faltas', String(P.stats.fouls)], ['Dinero ganado', '$' + (P.stats.earned || 0)], ['Taco', OM.cueDef(P.cue).name.replace('Taco ', '')]];
+        if (!S.caos) OM.FONT.draw(ctx, OM.fmt(P.points), x + pw - 12, y + 10, { color: '8', size: 2, align: 'right', shadow: '0' });
+        const rows = S.caos ? [['Bolas embocadas', String(P.stats.balls)], ['Faltas', String(P.stats.fouls)], ['Dinero gastado', '$' + (P.stats.spent || 0)], ['Taco', OM.cueDef(P.cue).name.replace('Taco ', '')]] : [['Partidas ganadas', P.wins + ' de ' + S.n], ['Mejor tiro', OM.fmt(P.stats.best)], ['Bolas embocadas', String(P.stats.balls)], ['Faltas', String(P.stats.fouls)], ['Dinero ganado', '$' + (P.stats.earned || 0)], ['Taco', OM.cueDef(P.cue).name.replace('Taco ', '')]];
         rows.forEach((r, i) => { OM.FONT.draw(ctx, r[0], x + 12, y + 38 + i * 13, { color: '6' }); OM.FONT.draw(ctx, r[1], x + pw - 12, y + 38 + i * 13, { color: '8', align: 'right' }); });
         const n = P.jokers.length, sp = Math.min(38, (pw - 24 - 30) / Math.max(1, n - 1));
         P.jokers.forEach((J, i) => {
@@ -515,7 +520,7 @@ OM.SCENES = OM.SCENES || {};
         });
       });
       const off = OM.NET.on;
-      if (!off && G.button(CX - 150, 300, 140, 24, 'REVANCHA', 'red', false, 'Enter')) startSeries(Object.assign({}, S.cfg, { seed: null }), S.me);
+      if (!off && G.button(CX - 150, 300, 140, 24, 'REVANCHA', 'red', false, 'Enter')) startSeries(Object.assign({}, S.cfg, { seed: null, breaker: 1 - this.win }), S.me); // revancha: saca el que perdió
       if (G.button(off ? CX - 70 : CX + 10, 300, 140, 24, 'MENÚ', 'dark', false, 'Escape')) { OM.NET.close(); OM.go('title'); }
       OM.FONT.draw(ctx, 'Semilla ' + S.seedStr, CX, 340, { color: '4', align: 'center' });
     },

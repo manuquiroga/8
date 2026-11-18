@@ -30,7 +30,8 @@ OM.Physics = (function () {
     const W = {
       balls: [], pockets: [], jaws: [], t: 0, acc: 0, shots: 0,
       seed: opts.seed || 1,
-      decel: DECEL * (opts.frictionMul || 1),
+      decel: DECEL * (opts.frictionMul || 1), decelBase: DECEL,
+      tokens: null, tokenGot: false, // Bolsa del Diablo (modo CAOS): [{x,y,r}]; la blanca la recoge una vez por tiro
       pocketMul: opts.pocketMul || 1,
       pocketPull: opts.pocketPull || 1,
       sealedSides: !!opts.sealedSides,
@@ -193,6 +194,10 @@ OM.Physics = (function () {
         b.x += b.vx * h; b.y += b.vy * h;
         b.rollX += b.vx * h; b.rollY += b.vy * h;
       }
+      // Bolsa del Diablo: la recoge la blanca al pasar por encima (sin estar en el aire)
+      if (W.tokens && !W.tokenGot && b.num === 0 && !air && sp > 0) {
+        for (const T of W.tokens) if ((b.x - T.x) * (b.x - T.x) + (b.y - T.y) * (b.y - T.y) < (T.r + b.r) * (T.r + b.r)) { W.tokenGot = true; emit(W, { type: 'token', x: T.x, y: T.y, tok: T }); break; }
+      }
       // portales
       if (W.portals && !air && sp > 0 && b.tp <= 0) {
         for (let i = 0; i < 2; i++) {
@@ -348,7 +353,7 @@ OM.Physics = (function () {
     cue.vz = jump ? Math.min(JUMP_VZ_MAX, 70 + v * E * JUMP_K) * tm : 0;
     cue.z = jump ? 0.01 : 0;
     cue.hops = {};
-    W.t = 0; W.acc = 0; W.shots++;
+    W.t = 0; W.acc = 0; W.shots++; W.tokenGot = false;
     return { jump, curve: cue.curve };
   }
   // ¿qué truco saldría con estos mandos? (para la interfaz)

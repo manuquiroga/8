@@ -31,7 +31,7 @@ OM.HUD = (function () {
   H.jokerDesc = jokerDesc;
   H.defDesc = (def) => OM.colorize(def.desc.replace(/ \((Actual|Llevas|Cargado)[^)]*\)/, ''));
   const spent = (J) => { const d = OM.jokerDef(J.id); return J.used && (d.active || d.once); };
-  H.typeLabel = (def) => OM.RARITY[def.rarity].name + ' · ' + OM.JTYPE[OM.jtype(def)].name;
+  H.typeLabel = (def) => OM.RARITY[def.rarity].name + ' · ' + OM.JTYPE[OM.jtype(def)].name + (OM.S && OM.S.caos && OM.sceneName === 'table' && OM.jtype(def) === 'hechizo' ? ' · 1 turno' : '');
 
   // posición en pantalla de un comodín (para los textos flotantes). main = jugador de la fila grande.
   H.jokerPos = function (S, uid, main) {
@@ -54,8 +54,9 @@ OM.HUD = (function () {
     // rótulo del dueño
     ctx.fillStyle = OM.PAL[PCOL[pi]]; ctx.fillRect(L.jokers.x, L.jokers.y + L.jokers.h + 1, L.jokers.w, 1);
     // huecos vacíos
+    const caos = !!S.caos; // en el CAOS los huecos de hechizo y activo son la franja EN JUEGO (scene_table)
     types.forEach((type, k) => {
-      if (slots.includes(k)) return;
+      if (slots.includes(k) || caos) return; // en el CAOS esta fila es la franja EN JUEGO (scene_table)
       const x = slotX(k), T = OM.JTYPE[type];
       ctx.globalAlpha = 0.5; ctx.fillStyle = OM.PAL['1']; ctx.fillRect(x + 1, y0 + 1, L.cardW - 2, L.cardH - 2); ctx.globalAlpha = 1;
       ctx.fillStyle = OM.PAL[type === 'comodin' ? '5' : T.color];
@@ -66,6 +67,7 @@ OM.HUD = (function () {
     });
     let hover = -1;
     P.jokers.forEach((J, i) => {
+      if (caos && OM.jtype(OM.jokerDef(J.id)) !== 'comodin') return;
       const x = slotX(slots[i]), y = y0;
       const hov = G.inside(x, y, L.cardW, L.cardH) && !opts.locked;
       if (hov) hover = i;
@@ -77,7 +79,10 @@ OM.HUD = (function () {
       if (type === 'activo') {
         // los activos laten
         ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 5); ctx.fillStyle = OM.PAL.v; ctx.fillRect(x + 12, y + L.cardH + 1, 16, 2); ctx.globalAlpha = 1;
-      } else if (type === 'hechizo') { ctx.fillStyle = OM.PAL.u; ctx.fillRect(x + 12, y + L.cardH + 1, 16, 1); }
+      } else if (type === 'hechizo') {
+        if (J.live) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 8); ctx.fillStyle = OM.PAL.u; ctx.fillRect(x + 6, y + L.cardH + 1, 28, 2); ctx.globalAlpha = 1; }
+        else { ctx.fillStyle = OM.PAL.u; ctx.fillRect(x + 12, y + L.cardH + 1, 16, 1); }
+      }
       if (opts.markUid === J.uid) {
         ctx.globalAlpha = 0.55 + 0.3 * Math.sin(t * 8); ctx.strokeStyle = OM.PAL.c; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 6, L.cardW + 2, L.cardH + 2); ctx.globalAlpha = 1;
       }
@@ -105,8 +110,11 @@ OM.HUD = (function () {
     ctx.fillStyle = OM.PAL[PCOL[pi]]; ctx.fillRect(L.consum.x, L.consum.y + L.consum.h + 1, L.consum.w, 1);
     const y = L.consum.y + 16;
     OM.FONT.draw(ctx, '$' + P.money, L.consum.x + L.consum.w - 2, L.consum.y + 2, { color: 'h', align: 'right', shadow: '0' });
-    P.jokers.forEach((J, i) => {
+    // CAOS: las trastadas se ven en EN JUEGO; lo que espera a su turno late en azul
+    const list = S.caos ? P.jokers.filter((J) => { const d = OM.jokerDef(J.id); return OM.jtype(d) === 'comodin' || OM.Match.spellTarget(pi, d) === pi; }) : P.jokers;
+    list.forEach((J, i) => {
       const x = miniX(i), def = OM.jokerDef(J.id);
+      if (S.caos && OM.jtype(def) !== 'comodin') { ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 6); ctx.strokeStyle = OM.PAL.q; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 1, 22, 29); ctx.globalAlpha = 1; }
       const jig = H.jiggle[J.uid] || 0;
       if (jig > 0) H.jiggle[J.uid] = jig - 1 / 60;
       const hov = G.inside(x, y, 20, 27);
@@ -124,11 +132,24 @@ OM.HUD = (function () {
     // cabecera: partida y obstáculos
     const obs = M ? M.obstacles : (S.obstacles[S.matchIdx] || []);
     const mode = OM.MODES[OM.Match.matchMode(S, S.matchIdx)];
-    OM.UI.panel(ctx, P.x + 4, P.y + 4, P.w - 8, 36, obs.length ? 'blood' : 'inset');
-    OM.FONT.draw(ctx, 'PARTIDA ' + (S.matchIdx + 1) + '/' + S.n, P.x + 10, P.y + 9, { color: '8', shadow: '0' });
-    OM.FONT.draw(ctx, mode.name, P.x + P.w - 10, P.y + 9, { color: 'i', align: 'right', shadow: '0' });
-    OM.FONT.draw(ctx, obs.length ? obs.map((id) => OM.obstacleDef(id).name).join(' + ') : 'Mesa limpia', cx, P.y + 24, { color: obs.length ? 'd' : '5', align: 'center' });
-    if (obs.length && G.inside(P.x + 4, P.y + 4, P.w - 8, 36)) G.tooltip(cx, P.y + 44, 'OBSTÁCULOS', obs.map((id) => { const o = OM.obstacleDef(id); return o.name + ': ' + o.desc; }).join(' '), 'b');
+    const C = M && M.caos;
+    OM.UI.panel(ctx, P.x + 4, P.y + 4, P.w - 8, 36, obs.length || C ? 'blood' : 'inset');
+    if (C) {
+      // MODO CAOS: la condición de la mesa y cuándo cambia
+      const left = OM.CAOS.every - (C.turns % OM.CAOS.every);
+      OM.FONT.draw(ctx, 'CAOS', P.x + 10, P.y + 9, { color: 'c', shadow: '0', wave: 1, t });
+      OM.FONT.draw(ctx, 'cambia en ' + left + (left === 1 ? ' turno' : ' turnos'), P.x + P.w - 10, P.y + 9, { color: left === 1 ? (Math.floor(t * 4) % 2 ? 'i' : 'h') : '6', align: 'right', shadow: '0' });
+      OM.FONT.draw(ctx, obs.length ? obs.map((id) => OM.obstacleDef(id).name).join(' + ') : 'Mesa limpia', cx, P.y + 24, { color: obs.length ? 'd' : '5', align: 'center' });
+      if (G.inside(P.x + 4, P.y + 4, P.w - 8, 36)) {
+        const now = obs.length ? obs.map((id) => { const o = OM.obstacleDef(id); return o.name + ': ' + o.desc; }).join(' ') : 'Mesa limpia.';
+        G.tooltip(cx, P.y + 44, 'MESA DEL CAOS', now + ' {h}Luego{/}: ' + C.next.map((id) => OM.obstacleDef(id).name).join(' + ') + '.', 'c', 'Cambia cada ' + OM.CAOS.every + ' turnos');
+      }
+    } else {
+      OM.FONT.draw(ctx, 'PARTIDA ' + (S.matchIdx + 1) + '/' + S.n, P.x + 10, P.y + 9, { color: '8', shadow: '0' });
+      OM.FONT.draw(ctx, mode.name, P.x + P.w - 10, P.y + 9, { color: 'i', align: 'right', shadow: '0' });
+      OM.FONT.draw(ctx, obs.length ? obs.map((id) => OM.obstacleDef(id).name).join(' + ') : 'Mesa limpia', cx, P.y + 24, { color: obs.length ? 'd' : '5', align: 'center' });
+      if (obs.length && G.inside(P.x + 4, P.y + 4, P.w - 8, 36)) G.tooltip(cx, P.y + 44, 'OBSTÁCULOS', obs.map((id) => { const o = OM.obstacleDef(id); return o.name + ': ' + o.desc; }).join(' '), 'b');
+    }
 
     // jugadores
     let y = P.y + 44;
@@ -143,10 +164,13 @@ OM.HUD = (function () {
         ctx.fillStyle = OM.PAL['0']; ctx.fillRect(px - 1, y + 6, 7, 7);
         ctx.fillStyle = OM.PAL[k < Pl.wins ? 'h' : '3']; ctx.fillRect(px, y + 7, 5, 5);
       }
-      const shown = info.shown ? info.shown[pi] : Pl.points;
-      OM.FONT.draw(ctx, OM.fmt(shown), P.x + P.w - 12, y + 20, { color: '8', size: 2, align: 'right', shadow: '0' });
-      OM.FONT.draw(ctx, 'PTS', P.x + 10, y + 22, { color: '6' });
-      OM.FONT.draw(ctx, '$' + Pl.money, P.x + 10, y + 32, { color: 'h', shadow: '0' });
+      if (S.caos) OM.FONT.draw(ctx, '$' + Pl.money, P.x + P.w - 12, y + 20, { color: 'i', size: 2, align: 'right', shadow: '0' }); // el CAOS no va de puntos
+      else {
+        const shown = info.shown ? info.shown[pi] : Pl.points;
+        OM.FONT.draw(ctx, OM.fmt(shown), P.x + P.w - 12, y + 20, { color: '8', size: 2, align: 'right', shadow: '0' });
+        OM.FONT.draw(ctx, 'PTS', P.x + 10, y + 22, { color: '6' });
+        OM.FONT.draw(ctx, '$' + Pl.money, P.x + 10, y + 32, { color: 'h', shadow: '0' });
+      }
       // bolas que le quedan
       if (M && info.W) {
         if (M.mode === '8') {
@@ -163,6 +187,11 @@ OM.HUD = (function () {
     }
     // tiro actual: Puntos x Combo
     OM.UI.panel(ctx, P.x + 4, y, P.w - 8, 54, 'inset');
+    if (S.caos) {
+      // sin Puntos x Combo: solo el nombre del tiro, en grande
+      OM.FONT.draw(ctx, info.shotName || ' ', cx, y + 20, { color: info.shotColor || '7', align: 'center', size: 2, shadow: '0' });
+      y += 58;
+    } else {
     OM.FONT.draw(ctx, info.shotName || ' ', cx, y + 5, { color: info.shotColor || '7', align: 'center', shadow: '0' });
     const bump = info.bump || { c: 0, m: 0 }, bw = 66;
     OM.UI.valueBox(ctx, P.x + 10 - Math.round(bump.c * 2), y + 18 - Math.round(bump.c * 2), bw + Math.round(bump.c * 4), 28 + Math.round(bump.c * 4), OM.fmt(info.pts || 0), 'chips');
@@ -170,6 +199,7 @@ OM.HUD = (function () {
     OM.FONT.draw(ctx, 'x', cx, y + 26, { color: 'c', align: 'center', size: 2, shadow: '0' });
     if (G.inside(P.x + 4, y, P.w - 8, 54)) G.tooltip(cx, y + 58, 'PUNTOS x COMBO', 'Cada bola tuya da Puntos. Meter 2, 3 o 4 en un tiro sube el Combo (x2, x3, x5). Las bandas, combinaciones, tacadas, saltos y massés suman más.', 'q');
     y += 58;
+    }
     // info
     OM.UI.panel(ctx, P.x + 4, y, P.w - 8, 66, 'inset');
     (info.lines || []).forEach((ln, i) => { if (ln) OM.FONT.draw(ctx, ln.text, cx, y + 6 + i * 12, { color: ln.color || '7', align: 'center' }); });

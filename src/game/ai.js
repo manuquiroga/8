@@ -112,7 +112,7 @@ OM.AI = (function () {
   function plan(S, W, level) {
     const M = S.M, me = M.turn, P = S.players[me], lv = LV[level] || LV.medio;
     const m = OM.Match.mods(S, me), cue = OM.Match.cueBall(W);
-    let noise = lv.noise * (1 + m.shake * 0.8) * (OM.Match.hasObs(S, 'niebla') ? 1.5 : 1) * (m.guide === 0 ? 1.4 : 1);
+    let noise = lv.noise * (1 + m.shake * 0.8) * (OM.Match.hasObs(S, 'niebla') || m.fog ? 1.5 : 1) * (m.guide === 0 ? 1.4 : 1) * (m.lie ? 2.2 : 1);
     const shot = (angle, power) => ({ angle: angle + gauss() * noise, power: Math.max(0.1, Math.min(1, power * (1 + gauss() * 0.04))), spin: { f: 0, s: 0 }, elev: 0 });
     if (M.breakShot) {
       // saque: a la bola de cabeza, fuerte pero no siempre igual
@@ -124,8 +124,9 @@ OM.AI = (function () {
     const Rv = S.players[1 - me], onFinal = M.mode === '8' && !M.open && !OM.Match.remaining(S, W, me).length;
     const use = (kind, p) => { const i = act(kind); return i >= 0 && Math.random() < p ? { joker: i } : null; };
     const pick = use('heist', Rv.points >= 1500 ? 1 : 0)                       // Atraco: cuando el rival tiene mucho
-      || use('hex', 0.25)
-      || (!cands.length ? use('hand', 1) || use('quake', level === 'facil' ? 0 : 1) || use('free', 1) || use('rewind', 1)
+      || use('pickpocket', Rv.money >= 3 ? 1 : 0)
+      || use('hex', 0.25) || use('rush', 0.4) || use('shrink', 0.3)
+      || (!cands.length ? use('hand', 1) || use('tornado', 1) || use('quake', level === 'facil' ? 0 : 1) || use('free', 1) || use('rewind', 1)
         : use('bomb', 0.3) || use('xshot', 0.35) || use('boost', 0.3) || use('free', 0.2) || use('rewind', onFinal ? 1 : 0.15));
     if (pick) return pick;
     if (cands.length) {
@@ -192,5 +193,18 @@ OM.AI = (function () {
     }
   }
 
-  return { plan, place, shop, candidates };
+  // MODO CAOS: una compra en el turno del rival (1 hechizo y 1 activo por turno). Devuelve {a:'buy', k} o null.
+  // Prefiere trastadas (caen ya sobre el que tira) y la rareza.
+  function caosAct(S, pi) {
+    const MT = OM.Match, sh = S.M.caos.shop[pi];
+    if (!MT.caosOpen(S, pi)) return null;
+    const best = sh.offers.map((o, k) => {
+      if (MT.caosCanBuy(S, pi, k)) return { k, v: 0 };
+      const d = OM.jokerDef(o.id);
+      return { k, v: ((MT.isTrap(d) ? 3 : 2) + RW[d.rarity] * 0.4) * (0.7 + Math.random() * 0.6) };
+    }).filter((x) => x.v > 0).sort((a, b) => b.v - a.v)[0];
+    return best ? { a: 'buy', k: best.k } : null;
+  }
+
+  return { plan, place, shop, candidates, caosAct };
 })();

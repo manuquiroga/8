@@ -2,6 +2,41 @@
 
 Cambios del juego pensados para jugadores. Los detalles técnicos y los números del bot de balance están en [docs/DEVLOG.md](docs/DEVLOG.md).
 
+## 3.2 — MODO CAOS · 2026-11-18 (sin publicar, en playtest)
+
+**Nuevo formato: CAOS.** Se elige en la preparación (contra bot o 2 jugadores) y en la sala online (lo elige el anfitrión): `FORMATO: SERIE / CAOS`.
+
+### Cómo se juega
+- **Una sola partida y sin puntos** (bola 8, bola 9 o mixta): gana quien gane la partida. Fuera todo lo que solo da puntos: Furia, Saqueo, Codicia, Atraco y Gran Golpe no salen en su tienda, los tacos no traen comodines y no hay Fiebre ni Verdugo. El dinero es solo para la tienda.
+- **Se compra DURANTE la partida, en el turno del rival.** La tienda se despliega sola sobre la parte de abajo de la mesa (tecla **B**; en 2 jugadores en el mismo dispositivo, con la pestaña TIENDA de arriba a la derecha).
+- **Comprar = lanzar.** Nada se guarda en la mano:
+  - Cartas con insignia **roja** (trastadas y trampas): le caen al rival **en el acto**, en el turno que está jugando.
+  - Cartas con insignia **azul** (para ti): se disparan solas **al empezar tu turno**.
+  - Al pasar el ratón por una carta se ilumina adónde va a ir; al comprarla, la carta vuela hasta allí.
+- **5 cartas por tienda, sin cambiar.** Puedes comprar **un hechizo y un activo** por cada turno del rival.
+- **Si el rival encadena tiros** (a partir del tercero seguido embocando), tu tienda se llena de **trampas** y puedes volver a comprar.
+- **La mecha**: como mucho **5 tiros seguidos**. La mecha está sobre la banda de arriba y se quema con cada tiro; cuando llega a la bomba, el turno pasa al rival (sin falta). Así nadie limpia la mesa de una.
+- **EN JUEGO**: donde la serie tiene los huecos de hechizo y activo, el CAOS muestra lo que afecta al tiro actual (marco rojo = del rival, azul = propio). Todo dura un turno; al acabarse, la carta revienta.
+- **Dinero justo**: empiezas con $5, cobras +$3 en cada tienda (+$2 si te quedan más bolas que al rival), **+$1 por cada bola que mete el rival** (cuanto más larga su tacada, más trampas le puedes tirar), los trucos pagan hasta $10 y la Bolsa del Diablo +$4.
+- **La mesa cambia cada 2 turnos** (Péndulo, Ciénaga, Pilares, Portales, Niebla...). A partir del turno 6 cambian **dos cosas a la vez**. El panel avisa cuántos turnos faltan y la siguiente condición.
+- **Condiciones nuevas, solo del CAOS**: Bocazas (troneras +35%), Lluvia de Oro (+$2 por bola), Rebajas (tienda a mitad de precio) y Turbo (+40% de potencia).
+- **Bolsa del Diablo**: aparece en el paño con cada cambio de mesa. Si tu blanca pasa por encima: +$4.
+- **20 segundos por tiro**: si se acaban, el taco dispara solo.
+
+### Reglas nuevas en la serie
+- **Revancha**: saca el que perdió (también en el CAOS).
+- **Meter la 8 antes de tiempo (o con falta) hace perder la SERIE entera** y deja tus puntos a 0. El Seguro de Vida la sigue salvando. Entre bots pasa en ~1 de cada 9 partidas, así que cerca de la mitad de las series de 5 acaban antes por esta regla.
+- **El dinero que sobra al final da puntos** (en la serie): cada $1 = 50 puntos.
+
+### 12 cartas nuevas (también salen en la serie normal)
+- **Hechizos**: Taco de Plomo (el rival -35% de potencia), Codicia (+60 y +$1 por bola), Saqueo (cada bola roba 80), Furia (x2 Combo), Niebla Negra (el rival solo ve cerca de su blanca), Espejismo (la guía del rival apunta torcida), Cerrojo (las troneras laterales del rival, selladas), Borrachera (el taco del rival se tambalea y pone efecto al azar).
+- **Activos**: Reloj de Arena (el próximo tiro del rival, 8 segundos), Carterista (roba hasta $6), Sabotaje (el próximo tiro del rival, troneras -40%), Tornado (todas las bolas a sitios al azar, sin gastar turno).
+
+### Otros
+- Online: el código de sala cambia de prefijo (las salas de 3.1 y 3.2 no se ven entre sí).
+- `node tools/simtest.js 20 medio medio 8 caos` simula partidas CAOS bot contra bot.
+- Arreglado: el dibujo de Codicia pisaba el de Boca Chica.
+
 ## 3.1 — Tienda y comodines nuevos · 2026-11-17 (sin publicar, en playtest)
 
 **Adiós al draft de "1 comodín por partida". Ahora hay dinero y tienda.**
